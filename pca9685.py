@@ -3,8 +3,10 @@
 import time
 import Adafruit_PCA9685
 import rospy
+import math
 from std_msgs.msg import String
 bldc=Adafruit_PCA9685.PCA9685()
+from sensor_msgs.msg import Imu
 
 servoMin=150
 servoMax=550
@@ -30,27 +32,57 @@ def msg_callback(msg):
         print(value)
     except ValueError:
         print("error")
+        
+def imu_callback(msg):
+    gx = msg.angular_velocity.x
+    gy = msg.angular_velocity.y
+    gz = msg.angular_velocity.z
+    
+    ax = msg.linear_acceleration.x
+    ay = msg.linear_acceleration.y
+    az = msg.linear_acceleration.z
+    
+    ARoll = (180/math.pi)*(math.atan(ax/(math.sqrt((ay*ay)+(az*az)))))
+    APitch = (180/math.pi)*(math.atan(ay/(math.sqrt((ax*ax)+(az*az)))))
+    
+    print("roll",ARoll)
+    print("pitch",APitch)
 
 bldc.set_pwm_freq(60)        
-
-'''
-set_angle(0,100)
-set_angle(1,100)
-set_angle(2,100)
-set_angle(3,100)
-print('100')
-time.sleep(10)
-
-set_angle(0,0)
-set_angle(1,0)
-set_angle(2,0)
-set_angle(3,0)
-print('0')
-time.sleep(5)
-'''
 
 if __name__ == '__main__':
     rospy.init_node('topic_sub_node')
     sub = rospy.Subscriber('/chatter',String,msg_callback,queue_size=1)
+    sub2 = rospy.Subscriber('/camera/imu',Imu,imu_callback,queue_size=1)
     
     rospy.spin()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
