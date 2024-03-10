@@ -6,7 +6,7 @@ import Adafruit_PCA9685
 import rospy
 import math
 from std_msgs.msg import String
-from sensor_msgs.msg import Imu
+import threading
 
 bldc=Adafruit_PCA9685.PCA9685()
 # Create a new Mpu6050 object
@@ -39,8 +39,6 @@ def set_angle(channel,angle):
     
 def msg_callback(msg):
     try:
-        accelerometer_data, gyroscope_data, temperature = read_sensor_data()
-        print("Accelerometer data:", accelerometer_data)
         value = int(msg.data)
         value = int((value-1000))
         set_angle(0, value)
@@ -51,12 +49,41 @@ def msg_callback(msg):
     except ValueError:
         print("error")
         
-def imu_callback(msg):
-    accelerometer_data, gyroscope_data, temperature = read_sensor_data()
-    print("Accelerometer data:", accelerometer_data)
-    
-    #ARoll = (180/math.pi)*(math.atan(ax/(math.sqrt((ay*ay)+(az*az)))))
-    #APitch = (180/math.pi)*(math.atan(ay/(math.sqrt((ax*ax)+(az*az)))))
+def imu_data():
+    lgx, lgy, lgz = 0, 0, 0
+    GRoll, GPitch, GYaw = 0, 0, 0
+    FRoll, FPitch = 0, 0
+    while True:
+        now = time.time()
+        accelerometer_data, gyroscope_data, temperature = read_sensor_data()
+        ax = accelerometer_data['x']
+        ay = accelerometer_data['y']
+        az = accelerometer_data['z']
+        
+        gx = gyroscope_data['x']
+        gy = gyroscope_data['y']
+        gz = gyroscope_data['z']
+        
+        ARoll = (180/math.pi)*(math.atan(ax/(math.sqrt((ay*ay)+(az*az)))))
+        APitch = (180/math.pi)*(math.atan(ay/(math.sqrt((ax*ax)+(az*az)))))
+        
+        GRoll -= ((gy + lgy)/2)*0.03
+        GPitch += ((gx + lgx)/2)*0.03
+        GYaw += ((gz + lgz)/2)*0.03
+        
+        FRoll = 0.8*(FRoll-(((gy+lgy)/2)*0.03))+0.2*ARoll
+        FPitch = 0.8*(FPitch-(((gx+lgx)/2)*0.03))+0.2*APitch
+        
+        lgx = gx
+        lgy = gy
+        lgz = gz
+        
+        #print("A :", ARoll)
+        print("G :", GPitch)
+        #print("Gy :", gy)
+        print("A :", APitch)
+        print("F :",FPitch)
+        time.sleep(0.03-(time.time()-now))
     
 
 bldc.set_pwm_freq(60)        
@@ -64,21 +91,12 @@ bldc.set_pwm_freq(60)
 if __name__ == '__main__':
     rospy.init_node('topic_sub_node')
     sub = rospy.Subscriber('/chatter',String,msg_callback,queue_size=1)
+    imu_thread = threading.Thread(target=imu_data)
+    imu_thread.start()
+    imu_thread.join()
     #sub2 = rospy.Subscriber('/camera/imu',Imu,imu_callback,queue_size=1)
     
     rospy.spin()
-    
-# Start a while loop to continuously read the sensor data
-'''
-while True:
 
-    # Read the sensor data
-    accelerometer_data, gyroscope_data, temperature = read_sensor_data()
 
-    # Print the sensor data
-    print("Accelerometer data:", accelerometer_data)
-    #print("Gyroscope data:", gyroscope_data)
-    #print("Temp:", temperature)
 
-    # Wait for 1 second
-'''
