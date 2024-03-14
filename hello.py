@@ -1,29 +1,47 @@
 #!/usr/bin/env python
 
-import mpu6050
 import time
 import Adafruit_PCA9685
 import rospy
 import math
 from std_msgs.msg import String
 import threading
+import serial
+
+roll,pitch,yaw=0.0,0.0,0.0
+
+#PID Variables
+Iterm=0
+prev_Dterm=0
+roll_output=0
+
+p_Iterm=0
+p_prev_Dterm=0
+pitch_output=0
+
+def pid(pid_target,pid_kp,pid_ki,pid_kd,rpy_angle,Iterm,prev_Dterm):
+    rate_kp=pid_kp
+    rate_ki=pid_ki
+    rate_kd=pid_kd
+
+    error = pid_target-float(rpy_angle)
+    Pterm=rate_kp*error
+    Iterm+=rate_ki*error*0.001
+    Dterm=-((float(rpy_angle) - prev_Dterm)/0.001)*rate_kd
+    Dterm=prev_Dterm*0.9+Dterm*0.1
+
+    output=int(Pterm+Iterm+Dterm)
+    
+    prev_target=float(rpy_angle)
+    prev_Dterm=Dterm
+    
+    return output,Iterm,prev_Dterm
+
+
 
 bldc=Adafruit_PCA9685.PCA9685()
-# Create a new Mpu6050 object
-mpu6050 = mpu6050.mpu6050(0x68)
+ser = serial.Serial('/dev/ttyUSB1',115200)
 
-# Define a function to read the sensor data
-def read_sensor_data():
-    # Read the accelerometer values
-    accelerometer_data = mpu6050.get_accel_data()
-
-    # Read the gyroscope values
-    gyroscope_data = mpu6050.get_gyro_data()
-
-    # Read temp
-    temperature = mpu6050.get_temp()
-
-    return accelerometer_data, gyroscope_data, temperature
 servoMin=150
 servoMax=550
 
@@ -41,50 +59,31 @@ def msg_callback(msg):
     try:
         value = int(msg.data)
         value = int((value-1000))
-        set_angle(0, value)
-        set_angle(1, value)
-        set_angle(2, value)
-        set_angle(3, value)
-        print(value)
+        set_angle(1, value+roll_output+pitch_output)
+        set_angle(2, value+roll_output-pitch_output)
+        set_angle(3, value-roll_output-pitch_output)
+        set_angle(0, value-roll_output+pitch_output)
+        print(value-roll_output-pitch_output)
     except ValueError:
         print("error")
         
 def imu_data():
-    lgx, lgy, lgz = 0, 0, 0
-    GRoll, GPitch, GYaw = 0, 0, 0
-    FRoll, FPitch = 0, 0
+    global roll_output,pitch_output,Iterm,prev_Dterm,p_Iterm,p_prev_Dterm
+    #global roll, pitch, yaw
+    #global Iterm, prev_Dterm,roll, pitch, yaw
     while True:
-        now = time.time()
-        accelerometer_data, gyroscope_data, temperature = read_sensor_data()
-        ax = accelerometer_data['x']
-        ay = accelerometer_data['y']
-        az = accelerometer_data['z']
-        
-        gx = gyroscope_data['x']
-        gy = gyroscope_data['y']
-        gz = gyroscope_data['z']
-        
-        ARoll = (180/math.pi)*(math.atan(ax/(math.sqrt((ay*ay)+(az*az)))))
-        APitch = (180/math.pi)*(math.atan(ay/(math.sqrt((ax*ax)+(az*az)))))
-        
-        GRoll -= ((gy + lgy)/2)*0.03
-        GPitch += ((gx + lgx)/2)*0.03
-        GYaw += ((gz + lgz)/2)*0.03
-        
-        FRoll = 0.8*(FRoll-(((gy+lgy)/2)*0.03))+0.2*ARoll
-        FPitch = 0.8*(FPitch-(((gx+lgx)/2)*0.03))+0.2*APitch
-        
-        lgx = gx
-        lgy = gy
-        lgz = gz
-        
-        #print("A :", ARoll)
-        print("G :", GPitch)
-        #print("Gy :", gy)
-        print("A :", APitch)
-        print("F :",FPitch)
-        time.sleep(0.03-(time.time()-now))
-    
+        if ser.in_waiting > 0:
+            received_data = ser.readline().decode().rstrip()
+            received_data = received_data.replace("*","")
+            split_data = received_data.split(',')
+            #print(split_data)
+            try:
+                roll,pitch,yaw=split_data[0],split_data[1],split_data[2]
+                roll_output,Iterm,prev_Dterm=pid(0,0.5,0,0,roll,Iterm,prev_Dterm)
+                pitch_output,p_Iterm,p_prev_Dterm=pid(0,0.5,0,0,pitch,p_Iterm,p_prev_Dterm)
+            except:
+                continue
+            #print(roll,pitch,yaw)
 
 bldc.set_pwm_freq(60)        
 
@@ -94,8 +93,7 @@ if __name__ == '__main__':
     imu_thread = threading.Thread(target=imu_data)
     imu_thread.start()
     imu_thread.join()
-    #sub2 = rospy.Subscriber('/camera/imu',Imu,imu_callback,queue_size=1)
-    
+
     rospy.spin()
 
 
