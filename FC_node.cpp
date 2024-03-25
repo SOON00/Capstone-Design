@@ -90,8 +90,8 @@ double Ia_fp=0.01;
 double Da_fp=0.5;
 
 //Yaw PID gains
-double Py=1;
-double Dy=0.01;
+double Py=0.01;
+double Dy=0;
 //--------------------------------------------------------
 
 
@@ -116,17 +116,17 @@ int main(int argc, char **argv){
 	int flag_imu=0;//monitoring imu's availability
 
 	while(ros::ok()){
-		// if(arr[5]<1300){ // 아마 특정 스위치를 올렸을 때 다른 코드 안돌게 하는듯?
-		// 	flag_imu=0;
+		if(arr[6]<1500){ // Emergency Stop
+		 	flag_imu=0;
 
-		// 	PWM_cmd.data.resize(4);
-		// 	PWM_cmd.data[0]=150;//각 모터에 대한 PWM값
-		// 	PWM_cmd.data[1]=150;
-		// 	PWM_cmd.data[2]=150;
-		// 	PWM_cmd.data[3]=150;
-		// }
+		 	PWM_cmd.data.resize(4);
+		 	PWM_cmd.data[0]=150;//각 모터에 대한 PWM값
+		 	PWM_cmd.data[1]=150;
+		 	PWM_cmd.data[2]=150;
+		 	PWM_cmd.data[3]=150;
+		}
 
-		// else{//5번 스위치 작동
+		 else{//5번 스위치 작동
 			//Initialize desired yaw
 			if(flag_imu!=1){
 				y_d=imu_array[2];//initial desired yaw setting
@@ -150,15 +150,15 @@ int main(int argc, char **argv){
 			//y_d+=y_d_tangent;
             //요 각속도를 더하여 목표 요 각도를 만들기
 			//T_d=T_limit*((arr[3]-(double)1500)/(double)500);
-			T_d=T_limit*((arr[4]-(double)1500)/(double)400); //1100~1900 -1500 -400~400 /400 -1~1
+			T_d=T_limit*(((double)1500-arr[4])/(double)400); //1100~1900 -1500 -400~400 /400 -1~1
             //목표 추력
 
 			//ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
 			//rpyT_ctrl(r_d, p_d, y_d, T_d);
-			rpyT_ctrl(0, 0, 0, T_d);
+			rpyT_ctrl(-1, -5, 0, T_d);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
-		// }
+		}
 		//Publish data
 		PWM.publish(PWM_cmd);
 	
@@ -198,9 +198,9 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	double e_p=pitch_d-imu_array[1];
 	double e_y=yaw_d-imu_array[2];
 	
-	e_r=roll_d=0;
-	e_p=pitch_d=0;
-	e_y=yaw_d=0;
+	//e_r=roll_d=0;
+	//e_p=pitch_d=0;
+	//e_y=yaw_d=0;
 
 	e_r_i+=e_r*((double)1/freq);//롤 에러 적분 업데이트
 	if(fabs(e_r_i)>integ_limit)	e_r_i=(e_r_i/fabs(e_r_i))*integ_limit;
@@ -213,15 +213,18 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
 	//PID-fp_ctrl_off
 	// if(arr[4]<1500){//일반적인 PID 제어
-		tau_r_d=Pa*e_r+Ia*e_r_i+Da*(-imu_array[3])+(double)0.3;
+		//tau_r_d=Pa*e_r+Ia*e_r_i+Da*(-imu_array[3])+(double)0.3;
+		tau_r_d=Pa*e_r;
         //롤 각도에 대한 목표 토크 PID로 구하기
-		tau_p_d=Pa*e_p+Ia*e_p_i+Da*(-imu_array[4])+(double)0.2;
+		//tau_p_d=Pa*e_p+Ia*e_p_i+Da*(-imu_array[4])+(double)0.2;
+		tau_p_d=Pa*e_p;
 	// }
 	// else if(arr[4]>=1500){//Fixed Point모드 PID 제어 (다른 게인값 사용)
 	// 	tau_r_d=Pa_fp*e_r+Ia_fp*e_r_i+Da_fp*(-TGP_ang_vel.x)+(double)0.3;
 	// 	tau_p_d=Pa_fp*e_p+Ia_fp*e_p_i+Da_fp*(-TGP_ang_vel.y)+(double)0.2;;
 	// }	
-	double tau_y_d=Py*e_y+Dy*(-imu_array[5]);	
+	double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
+	tau_y_d=0;	
 	
 
 	//ROS_INFO("xvel:%lf, yvel:%lf, zvel:%lf", TGP_ang_vel.x, TGP_ang_vel.y, TGP_ang_vel.z);
