@@ -56,7 +56,7 @@ static double rp_limit=0.2;//(rad)       롤피치 각도제한 11도
 static double y_vel_limit=0.01;//(rad/s) 요 각속도 제한
 static double y_d_tangent_deadzone=(double)0.05*y_vel_limit;//(rad/s)
 //작은 오차에 의한 드론의 움직임 방지
-static double T_limit=60;//(N)           추력 제한
+static double T_limit=100;//(N)           추력 제한
 //--------------------------------------------------------
 
 
@@ -71,6 +71,7 @@ void imu_arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
 
 void msg_callback(const std_msgs::Float32::ConstPtr &msg);
 
+double constrain(double F);
 //--------------------------------------------------------
 
 
@@ -116,14 +117,14 @@ int main(int argc, char **argv){
 	int flag_imu=0;//monitoring imu's availability
 
 	while(ros::ok()){
-		if(arr[6]<1500){ // Emergency Stop
+		if(arr[1]>1500){ // Emergency Stop
 		 	flag_imu=0;
 
 		 	PWM_cmd.data.resize(4);
-		 	PWM_cmd.data[0]=150;//각 모터에 대한 PWM값
-		 	PWM_cmd.data[1]=150;
-		 	PWM_cmd.data[2]=150;
-		 	PWM_cmd.data[3]=150;
+		 	PWM_cmd.data[0]=100;//각 모터에 대한 PWM값
+		 	PWM_cmd.data[1]=100;
+		 	PWM_cmd.data[2]=100;
+		 	PWM_cmd.data[3]=100;
 		}
 
 		 else{//5번 스위치 작동
@@ -238,17 +239,23 @@ void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thru
     F2 = -(1.5625 * tau_r_des - 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
     F3 = -(-1.5625 * tau_r_des - 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
     F4 = -(-1.5625 * tau_r_des + 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
-
+    F1= constrain(F1);
+    F2= constrain(F2);
+    F3= constrain(F3);
+    F4= constrain(F4);
 	ROS_INFO("F1:%lf, F2:%lf, F3:%lf, F4:%lf", F1, F2, F3, F4);
 	PWM_cmd.data.resize(4);
 	PWM_cmd.data[0]=Force_to_PWM(F1);
-    //F1에 해당하는 힘을 PWM으로 바꿔서 데이터에 넣고 모터에 전달
 	PWM_cmd.data[1]=Force_to_PWM(F2);
 	PWM_cmd.data[2]=Force_to_PWM(F3);
-	PWM_cmd.data[3]=Force_to_PWM(F4);	
+	PWM_cmd.data[3]=Force_to_PWM(F4);
 	//ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM_cmd.data[0], PWM_cmd.data[1], PWM_cmd.data[2], PWM_cmd.data[3]);
 }
-
+double constrain(double F){
+    if(F<=-25) return -25;
+    else if(F>25) return 25;
+    else return F;
+}
 double Force_to_PWM(double F){
 //힘을 PWM으로 바꿔줘야하는데 이건 실험을 해봐야 할 듯...?
 	double param1=1111.07275742670;
@@ -261,11 +268,10 @@ double Force_to_PWM(double F){
 	if(pwm>1880)	{pwm=1880;}
 	pwm=((pwm-1111)*800)/769+100;
 	
+	pwm=100 + ((F+25)/50)*300;
 	
-	pwm=F*61;
-	if(pwm>100 && pwm<=900) pwm=F*60;
-	else if(pwm>900) pwm=900;
-	else if(pwm<=100) pwm=100;
+	//pwm=arr[3]-1400 + ((F+25)/50)*(2400-arr[3]);
+
 
 	return pwm;
 }
