@@ -91,7 +91,7 @@ double Ia_fp=0.01;
 double Da_fp=0.5;
 
 //Yaw PID gains
-double Py=0.01;
+double Py=1;
 double Dy=0;
 //--------------------------------------------------------
 
@@ -225,7 +225,7 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	// 	tau_p_d=Pa_fp*e_p+Ia_fp*e_p_i+Da_fp*(-TGP_ang_vel.y)+(double)0.2;;
 	// }	
 	double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
-	tau_y_d=0;	
+	//tau_y_d=0;	//yaw controll off
 	
 
 	//ROS_INFO("xvel:%lf, yvel:%lf, zvel:%lf", TGP_ang_vel.x, TGP_ang_vel.y, TGP_ang_vel.z);
