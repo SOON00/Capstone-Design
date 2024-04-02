@@ -52,11 +52,12 @@ double T_d=0;//desired thrust                 목표 스러스트
 
 //General parameters======================================
 
-static double rp_limit=0.2;//(rad)       롤피치 각도제한 11도
-static double y_vel_limit=0.01;//(rad/s) 요 각속도 제한
+static double rp_limit=10;//(degree)       롤피치 각도제한 
+static double y_vel_limit=0.1;//(degree/s) 요 각속도 제한
 static double y_d_tangent_deadzone=(double)0.05*y_vel_limit;//(rad/s)
 //작은 오차에 의한 드론의 움직임 방지
 static double T_limit=100;//(N)           추력 제한
+static double yaw_limit=0;
 //--------------------------------------------------------
 
 
@@ -140,23 +141,29 @@ int main(int argc, char **argv){
 			}
 	
 			//TGP ctrl
-			//r_d=rp_limit*((arr[0]-(double)1500)/(double)500);
+			r_d=rp_limit*(-(arr[5]-(double)1500)/(double)500);
             //목표 롤 각도 최대값 곱하기 -1or1 (수신기 신호를 -1~1로 맵핑하는 느낌)
-			//p_d=rp_limit*(-(arr[1]-(double)1500)/(double)500);
+			p_d=rp_limit*(-(arr[3]-(double)1500)/(double)500);
             //목표 피치
-			//y_d_tangent=y_vel_limit*((arr[2]-(double)1500)/(double)500);
+			if(fabs(arr[2]>1450 && arr[2]<1550)) {yaw_limit = 1500;}
+			else {yaw_limit = arr[2];}
+			y_d_tangent=y_vel_limit*((yaw_limit-(double)1500)/(double)500);
+			//y_d=rp_limit*(-(arr[2]-(double)1500)/(double)500);
             //목표 요 각속도
 			//if(fabs(y_d_tangent)<y_d_tangent_deadzone || fabs(y_d_tangent)>y_vel_limit) y_d_tangent=0;
             //데드존안에 있지 않거나 제한값을 초과할 때 요 각속도 0으로 하여 안정화
-			//y_d+=y_d_tangent;
+			y_d-=y_d_tangent;
+			if(y_d>180) y_d-=360;
+			else if (y_d<-180) y_d+=360; 
             //요 각속도를 더하여 목표 요 각도를 만들기
 			//T_d=T_limit*((arr[3]-(double)1500)/(double)500);
 			T_d=T_limit*(((double)1500-arr[4])/(double)400); //1100~1900 -1500 -400~400 /400 -1~1
             //목표 추력
 
-			//ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
-			//rpyT_ctrl(r_d, p_d, y_d, T_d);
-			rpyT_ctrl(-1, -5, 0, T_d);
+			ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
+			//if(yaw_limit==1500) y_d=0;//if angular_y_vel_desire is 0, y_d=0
+			rpyT_ctrl(r_d, p_d, y_d, T_d);
+			//rpyT_ctrl(0, 0, 0, T_d);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
@@ -199,6 +206,9 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	double e_p=pitch_d-imu_array[1];
 	double e_y=yaw_d-imu_array[2];
 	
+	if(e_y>180) e_y-=360;
+	else if (e_y<-180) e_y+=360;
+	
 	//e_r=roll_d=0;
 	//e_p=pitch_d=0;
 	//e_y=yaw_d=0;
@@ -215,10 +225,10 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	//PID-fp_ctrl_off
 	// if(arr[4]<1500){//일반적인 PID 제어
 		//tau_r_d=Pa*e_r+Ia*e_r_i+Da*(-imu_array[3])+(double)0.3;
-		tau_r_d=Pa*e_r;
+		tau_r_d=Pa*e_r+Ia*e_r_i+Da*(imu_array[3]);
         //롤 각도에 대한 목표 토크 PID로 구하기
 		//tau_p_d=Pa*e_p+Ia*e_p_i+Da*(-imu_array[4])+(double)0.2;
-		tau_p_d=Pa*e_p;
+		tau_p_d=Pa*e_p+Ia*e_p_i+Da*(-imu_array[4]);
 	// }
 	// else if(arr[4]>=1500){//Fixed Point모드 PID 제어 (다른 게인값 사용)
 	// 	tau_r_d=Pa_fp*e_r+Ia_fp*e_r_i+Da_fp*(-TGP_ang_vel.x)+(double)0.3;
