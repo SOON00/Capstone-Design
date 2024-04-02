@@ -65,7 +65,7 @@ static double yaw_limit=0;
 
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
 void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des);
-double Force_to_PWM(double F);
+double Force_to_PWM(double F, double Thrust);
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d);
 
 void imu_arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
@@ -265,10 +265,10 @@ void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thru
     F4= constrain(F4);
 	ROS_INFO("F1:%lf, F2:%lf, F3:%lf, F4:%lf", F1, F2, F3, F4);
 	PWM_cmd.data.resize(4);
-	PWM_cmd.data[0]=Force_to_PWM(F1);
-	PWM_cmd.data[1]=Force_to_PWM(F2);
-	PWM_cmd.data[2]=Force_to_PWM(F3);
-	PWM_cmd.data[3]=Force_to_PWM(F4);
+	PWM_cmd.data[0]=Force_to_PWM(F1,Thrust_des);
+	PWM_cmd.data[1]=Force_to_PWM(F2,Thrust_des);
+	PWM_cmd.data[2]=Force_to_PWM(F3,Thrust_des);
+	PWM_cmd.data[3]=Force_to_PWM(F4,Thrust_des);
 	//ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM_cmd.data[0], PWM_cmd.data[1], PWM_cmd.data[2], PWM_cmd.data[3]);
 }
 double constrain(double F){
@@ -276,7 +276,7 @@ double constrain(double F){
     else if(F>25) return 25;
     else return F;
 }
-double Force_to_PWM(double F){
+double Force_to_PWM(double F, double Thrust){//-100<Thrust<100 +100 {(0~200)*4 +100}
 //힘을 PWM으로 바꿔줘야하는데 이건 실험을 해봐야 할 듯...?
 	double param1=1111.07275742670;
 	double param2=44543.2632092715;
@@ -286,9 +286,14 @@ double Force_to_PWM(double F){
 
 	double pwm=param1+sqrt(param2*F+param3);
 	if(pwm>1880)	{pwm=1880;}
-	pwm=((pwm-1111)*800)/769+100;
+	//pwm=((pwm-1111)*800)/769+100;
 	
 	pwm=100 + ((F+25)/50)*800;
+	
+	Thrust=100+(Thrust+100)*4;
+	if((Thrust+150)<pwm) pwm=Thrust+150;
+	else if((Thrust-150)>pwm) pwm=Thrust-150;
+	if(pwm>=900) pwm=900;
 	
 	//pwm=arr[3]-1400 + ((F+25)/50)*(2400-arr[3]);
 
