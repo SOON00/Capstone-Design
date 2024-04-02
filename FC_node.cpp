@@ -152,7 +152,7 @@ int main(int argc, char **argv){
             //목표 요 각속도
 			//if(fabs(y_d_tangent)<y_d_tangent_deadzone || fabs(y_d_tangent)>y_vel_limit) y_d_tangent=0;
             //데드존안에 있지 않거나 제한값을 초과할 때 요 각속도 0으로 하여 안정화
-			y_d-=y_d_tangent;
+			y_d+=y_d_tangent;
 			if(y_d>180) y_d-=360;
 			else if (y_d<-180) y_d+=360; 
             //요 각속도를 더하여 목표 요 각도를 만들기
@@ -167,11 +167,21 @@ int main(int argc, char **argv){
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
+			if(fabs(imu_array[0])>15 || fabs(imu_array[1])>15 || fabs(imu_array[5])>50){ // Emergency Stop
+		 	PWM_cmd.data.resize(4);
+		 	PWM_cmd.data[0]=100;//각 모터에 대한 PWM값
+		 	PWM_cmd.data[1]=100;
+		 	PWM_cmd.data[2]=100;
+		 	PWM_cmd.data[3]=100;
+		 	PWM.publish(PWM_cmd);
+		 	//break;             
+		}
 		//Publish data
 		PWM.publish(PWM_cmd);
 	
 		ros::spinOnce();
 		loop_rate.sleep();	
+
 	}
 	return 0;
 }
@@ -203,7 +213,7 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 //롤,피치 명령 토크와 요 각도 편차를 이용하여 요 명령 토크 계산
 //계산된 롤피치요 명령 토크, 스러스트 값을 이용하여 PWM 변환
 	double e_r=roll_d-imu_array[0];
-	double e_p=pitch_d-imu_array[1];
+	double e_p=pitch_d-(imu_array[1]+3.5);
 	double e_y=yaw_d-imu_array[2];
 	
 	if(e_y>180) e_y-=360;
@@ -245,10 +255,10 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
 void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des){
 	
-    F1 = -(1.5625 * tau_r_des + 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F2 = -(1.5625 * tau_r_des - 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F3 = -(-1.5625 * tau_r_des - 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F4 = -(-1.5625 * tau_r_des + 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
+    F1 = -(1.5625 * tau_r_des + 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
+    F2 = -(1.5625 * tau_r_des - 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
+    F3 = -(-1.5625 * tau_r_des - 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
+    F4 = -(-1.5625 * tau_r_des + 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
     F1= constrain(F1);
     F2= constrain(F2);
     F3= constrain(F3);
@@ -278,7 +288,7 @@ double Force_to_PWM(double F){
 	if(pwm>1880)	{pwm=1880;}
 	pwm=((pwm-1111)*800)/769+100;
 	
-	pwm=100 + ((F+25)/50)*300;
+	pwm=100 + ((F+25)/50)*800;
 	
 	//pwm=arr[3]-1400 + ((F+25)/50)*(2400-arr[3]);
 
