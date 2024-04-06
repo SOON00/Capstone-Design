@@ -92,7 +92,7 @@ double Ia_fp=0.01;
 double Da_fp=0.5;
 
 //Yaw PID gains
-double Py=1;
+double Py=2;
 double Dy=0;
 //--------------------------------------------------------
 
@@ -167,14 +167,23 @@ int main(int argc, char **argv){
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
-			if(fabs(imu_array[0])>15 || fabs(imu_array[1])>15 || fabs(imu_array[5])>50){ // Emergency Stop
+			if(fabs(imu_array[0])>15 || fabs(imu_array[1])>15 || fabs(imu_array[5])>50) { // Emergency Stop
 		 	PWM_cmd.data.resize(4);
 		 	PWM_cmd.data[0]=100;//각 모터에 대한 PWM값
 		 	PWM_cmd.data[1]=100;
 		 	PWM_cmd.data[2]=100;
 		 	PWM_cmd.data[3]=100;
 		 	PWM.publish(PWM_cmd);
-		 	//break;             
+		 	break;             //Emergency break code
+		}
+			if(arr[5] <= 100) { // Emergency Stop
+		 	PWM_cmd.data.resize(4);
+		 	PWM_cmd.data[0]=100;//각 모터에 대한 PWM값
+		 	PWM_cmd.data[1]=100;
+		 	PWM_cmd.data[2]=100;
+		 	PWM_cmd.data[3]=100;
+		 	PWM.publish(PWM_cmd);
+
 		}
 		//Publish data
 		PWM.publish(PWM_cmd);
@@ -213,7 +222,7 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 //롤,피치 명령 토크와 요 각도 편차를 이용하여 요 명령 토크 계산
 //계산된 롤피치요 명령 토크, 스러스트 값을 이용하여 PWM 변환
 	double e_r=roll_d-imu_array[0];
-	double e_p=pitch_d-(imu_array[1]+3.5);
+	double e_p=pitch_d-imu_array[1];
 	double e_y=yaw_d-imu_array[2];
 	
 	if(e_y>180) e_y-=360;
@@ -291,8 +300,8 @@ double Force_to_PWM(double F, double Thrust){//-100<Thrust<100 +100 {(0~200)*4 +
 	pwm=100 + ((F+25)/50)*800;
 	
 	Thrust=100+(Thrust+100)*4;
-	if((Thrust+150)<pwm) pwm=Thrust+150;
-	else if((Thrust-150)>pwm) pwm=Thrust-150;
+	if((Thrust+100)<pwm) pwm=Thrust+100;
+	else if((Thrust-100)>pwm) pwm=Thrust-100;
 	if(pwm>=900) pwm=900;
 	
 	//pwm=arr[3]-1400 + ((F+25)/50)*(2400-arr[3]);
