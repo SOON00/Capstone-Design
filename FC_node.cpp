@@ -82,7 +82,7 @@ double constrain(double F);
 double integ_limit=2;
 
 //Roll, Pitch PID gains
-double Pa=1;
+double Pa=0.01;
 double Ia=0;
 double Da=0;
 
@@ -92,7 +92,7 @@ double Ia_fp=0.01;
 double Da_fp=0.5;
 
 //Yaw PID gains
-double Py=2;
+double Py=0;
 double Dy=0;
 //--------------------------------------------------------
 
@@ -157,7 +157,7 @@ int main(int argc, char **argv){
 			else if (y_d<-180) y_d+=360; 
             //요 각속도를 더하여 목표 요 각도를 만들기
 			//T_d=T_limit*((arr[3]-(double)1500)/(double)500);
-			T_d=T_limit*(((double)1500-arr[4])/(double)400); //1100~1900 -1500 -400~400 /400 -1~1
+			T_d=T_limit*(((double)1500-arr[4])/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
             //목표 추력
 
 			ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
@@ -167,7 +167,7 @@ int main(int argc, char **argv){
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
-			if(fabs(imu_array[0])>15 || fabs(imu_array[1])>15 || fabs(imu_array[5])>50) { // Emergency Stop
+			if(fabs(imu_array[0])>35 || fabs(imu_array[1])>35) { // Emergency Stop
 		 	PWM_cmd.data.resize(4);
 		 	PWM_cmd.data[0]=100;//각 모터에 대한 PWM값
 		 	PWM_cmd.data[1]=100;
@@ -221,8 +221,8 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 //원하는 rpy,thrust값 받아서 PID제어. 롤,피치의 명령 토크 계산. 
 //롤,피치 명령 토크와 요 각도 편차를 이용하여 요 명령 토크 계산
 //계산된 롤피치요 명령 토크, 스러스트 값을 이용하여 PWM 변환
-	double e_r=roll_d-imu_array[0];
-	double e_p=pitch_d-imu_array[1];
+	double e_r=roll_d-(imu_array[0]-0.7);
+	double e_p=pitch_d-(imu_array[1]+1.6);
 	double e_y=yaw_d-imu_array[2];
 	
 	if(e_y>180) e_y-=360;
@@ -281,11 +281,11 @@ void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thru
 	//ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM_cmd.data[0], PWM_cmd.data[1], PWM_cmd.data[2], PWM_cmd.data[3]);
 }
 double constrain(double F){
-    if(F<=-25) return -25;
-    else if(F>25) return 25;
+    if(F<=0) return 0;
+    else if(F>1600) return 1600;
     else return F;
 }
-double Force_to_PWM(double F, double Thrust){//-100<Thrust<100 +100 {(0~200)*4 +100}
+double Force_to_PWM(double F, double Thrust){//0<Thrust<200  {(0~200)*4 +100}
 //힘을 PWM으로 바꿔줘야하는데 이건 실험을 해봐야 할 듯...?
 	double param1=1111.07275742670;
 	double param2=44543.2632092715;
@@ -299,11 +299,16 @@ double Force_to_PWM(double F, double Thrust){//-100<Thrust<100 +100 {(0~200)*4 +
 	
 	pwm=100 + ((F+25)/50)*800;
 	
-	Thrust=100+(Thrust+100)*4;
+	pwm=sqrt((F+243.1144)/0.0012)-343.9167;
+	
+	Thrust=100+Thrust*4;
 	if((Thrust+100)<pwm) pwm=Thrust+100;
 	else if((Thrust-100)>pwm) pwm=Thrust-100;
 	if(pwm>=900) pwm=900;
 	
+	pwm=sqrt((32*F+243.1144)/0.0012)-343.9167;
+	if(pwm<=100)	{pwm=100;}
+	if(pwm>=900)	{pwm=900;}
 	//pwm=arr[3]-1400 + ((F+25)/50)*(2400-arr[3]);
 
 
