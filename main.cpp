@@ -38,27 +38,30 @@ int main(int argc, char* argv[]) {
     ros::Subscriber cmd=nh.subscribe("/PWM", 3, &PWMCallback);
     //ros::Rate loop_rate(200);
     pca9685.init();
-    pca9685.setPWM(0, 0, 1900);
-    pca9685.setPWM(1, 0, 1900);
-    pca9685.setPWM(2, 0, 1900);
-    pca9685.setPWM(3, 0, 1900);
+    pca9685.setPWM(0, 0, 409);
+    pca9685.setPWM(1, 0, 409);
+    pca9685.setPWM(2, 0, 409);
+    pca9685.setPWM(3, 0, 409);
     sleep(5);
     
-    pca9685.setPWM(0, 0, 1200);
-    pca9685.setPWM(1, 0, 1200);
-    pca9685.setPWM(2, 0, 1200);
-    pca9685.setPWM(3, 0, 1200);
+    pca9685.setPWM(0, 0, 205);
+    pca9685.setPWM(1, 0, 205);
+    pca9685.setPWM(2, 0, 205);
+    pca9685.setPWM(3, 0, 205);
     sleep(5);
     while(ros::ok()){
-        pca9685.setPWM(0, 0, PWM[1]+1100);
-        pca9685.setPWM(1, 0, PWM[1]+1100);
-        pca9685.setPWM(2, 0, PWM[1]+1100);
-        pca9685.setPWM(3, 0, PWM[1]+1100);
+        PWM[0]=mapping(PWM[0],100, 900,205,409);
+        PWM[1]=mapping(PWM[1],100, 900,205,409);
+        PWM[2]=mapping(PWM[2],100, 900,205,409);
+        PWM[3]=mapping(PWM[3],100, 900,205,409);
+        pca9685.setPWM(0, 0, PWM[0]);
+        pca9685.setPWM(1, 0, PWM[1]);
+        pca9685.setPWM(2, 0, PWM[2]);
+        pca9685.setPWM(3, 0, PWM[3]);
         bldc_test.data.resize(4);
         for(int i=0; i<4; i++){
             bldc_test.data[i] = PWM[i];
         }
-        //std::cout << "hello" << std::endl;
     	bldc.publish(bldc_test);
     
         ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM[0], PWM[1], PWM[2], PWM[3]);
