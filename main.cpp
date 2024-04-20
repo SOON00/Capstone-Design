@@ -31,7 +31,9 @@ void setServo(int channel, int pulse_width) {
 }
 
 int min_pulse = 205;
-int max_pulse = 409;
+int max_pulse = 450;
+
+int motor1,motor2,motor3,motor4;
 int main(int argc, char* argv[]) {
     ros::init(argc, argv, "pca9685_node");
     ros::NodeHandle nh;
@@ -53,16 +55,15 @@ int main(int argc, char* argv[]) {
     pca9685.setPWM(3, 0, min_pulse);
     sleep(10);*/
     while(ros::ok()){
-    	ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM[0], PWM[1], PWM[2], PWM[3]);
-        PWM[0]=mapping(PWM[0],100, 900,min_pulse,max_pulse);
-        PWM[1]=mapping(PWM[1],100, 900,min_pulse,max_pulse);
-        PWM[2]=mapping(PWM[2],100, 900,min_pulse,max_pulse);
-        PWM[3]=mapping(PWM[3],100, 900,min_pulse,max_pulse);
+        motor1=mapping(PWM[0],100, 900,min_pulse,max_pulse);
+        motor2=mapping(PWM[1],100, 900,min_pulse,max_pulse);
+        motor3=mapping(PWM[2],100, 900,min_pulse,max_pulse);
+        motor4=mapping(PWM[3],100, 900,min_pulse,max_pulse);
         
-        pca9685.setPWM(0, 0, PWM[0]);
-        pca9685.setPWM(1, 0, PWM[1]);
-        pca9685.setPWM(2, 0, PWM[2]);
-        pca9685.setPWM(3, 0, PWM[3]);
+        pca9685.setPWM(0, 0, motor1);
+        pca9685.setPWM(1, 0, motor2);
+        pca9685.setPWM(2, 0, motor3);
+        pca9685.setPWM(3, 0, motor4);
         
         /*pca9685.setPWM(0, 0, min_pulse);
         pca9685.setPWM(1, 0, min_pulse);
@@ -74,7 +75,7 @@ int main(int argc, char* argv[]) {
         }
     	bldc.publish(bldc_test);
     
-        //ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM[0], PWM[1], PWM[2], PWM[3]);
+        ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",motor1, motor2, motor3, motor4);
         ros::spinOnce();
         loop_rate.sleep();
     }
