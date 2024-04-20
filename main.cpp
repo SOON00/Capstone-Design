@@ -30,43 +30,53 @@ void setServo(int channel, int pulse_width) {
     pca9685.setPWM(channel, 0, pulse_width);
 }
 
+int min_pulse = 205;
+int max_pulse = 409;
 int main(int argc, char* argv[]) {
     ros::init(argc, argv, "pca9685_node");
     ros::NodeHandle nh;
     
     ros::Publisher bldc=nh.advertise<std_msgs::Int16MultiArray>("bldc_test", 100);
-    ros::Subscriber cmd=nh.subscribe("/PWM", 3, &PWMCallback);
-    //ros::Rate loop_rate(200);
+    ros::Subscriber cmd=nh.subscribe("/PWM", 10, &PWMCallback);
+    ros::Rate loop_rate(100);
     pca9685.init();
-    pca9685.setPWM(0, 0, 409);
-    pca9685.setPWM(1, 0, 409);
-    pca9685.setPWM(2, 0, 409);
-    pca9685.setPWM(3, 0, 409);
+    /*ROS_INFO("max_pulse : %d",max_pulse);
+    pca9685.setPWM(0, 0, max_pulse);
+    pca9685.setPWM(1, 0, max_pulse);
+    pca9685.setPWM(2, 0, max_pulse);
+    pca9685.setPWM(3, 0, max_pulse);
     sleep(5);
-    
-    pca9685.setPWM(0, 0, 205);
-    pca9685.setPWM(1, 0, 205);
-    pca9685.setPWM(2, 0, 205);
-    pca9685.setPWM(3, 0, 205);
-    sleep(5);
+    ROS_INFO("min_pulse: %d",min_pulse);
+    pca9685.setPWM(0, 0, min_pulse);
+    pca9685.setPWM(1, 0, min_pulse);
+    pca9685.setPWM(2, 0, min_pulse);
+    pca9685.setPWM(3, 0, min_pulse);
+    sleep(10);*/
     while(ros::ok()){
-        PWM[0]=mapping(PWM[0],100, 900,205,409);
-        PWM[1]=mapping(PWM[1],100, 900,205,409);
-        PWM[2]=mapping(PWM[2],100, 900,205,409);
-        PWM[3]=mapping(PWM[3],100, 900,205,409);
+    	ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM[0], PWM[1], PWM[2], PWM[3]);
+        PWM[0]=mapping(PWM[0],100, 900,min_pulse,max_pulse);
+        PWM[1]=mapping(PWM[1],100, 900,min_pulse,max_pulse);
+        PWM[2]=mapping(PWM[2],100, 900,min_pulse,max_pulse);
+        PWM[3]=mapping(PWM[3],100, 900,min_pulse,max_pulse);
+        
         pca9685.setPWM(0, 0, PWM[0]);
         pca9685.setPWM(1, 0, PWM[1]);
         pca9685.setPWM(2, 0, PWM[2]);
         pca9685.setPWM(3, 0, PWM[3]);
+        
+        /*pca9685.setPWM(0, 0, min_pulse);
+        pca9685.setPWM(1, 0, min_pulse);
+        pca9685.setPWM(2, 0, min_pulse);
+        pca9685.setPWM(3, 0, min_pulse);*/
         bldc_test.data.resize(4);
         for(int i=0; i<4; i++){
             bldc_test.data[i] = PWM[i];
         }
     	bldc.publish(bldc_test);
     
-        ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM[0], PWM[1], PWM[2], PWM[3]);
+        //ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM[0], PWM[1], PWM[2], PWM[3]);
         ros::spinOnce();
-        //loop_rate.sleep();
+        loop_rate.sleep();
     }
     return 0; // very simple debug program, don't use in production
 }
