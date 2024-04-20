@@ -9,8 +9,8 @@ from rospy.numpy_msg import numpy_msg
 
 bldc=Adafruit_PCA9685.PCA9685()
 
-servoMin=150
-servoMax=550
+servoMin=205
+servoMax=450
 def constrain(x):
     if x>=900:
         x=900
@@ -24,7 +24,7 @@ def map(value,min_angle,max_angle,min_pulse,max_pulse):
     return min_pulse+(value/scale_factor)
     
 def set_angle(channel,angle):
-    pulse=int(map(angle,0,1000,servoMin,servoMax))
+    pulse=int(map(angle,100,900,servoMin,servoMax))
     bldc.set_pwm(channel,0,pulse)
 
 def msg_callback(msg):
