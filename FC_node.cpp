@@ -82,7 +82,7 @@ double constrain(double F);
 double integ_limit=2;
 
 //Roll, Pitch PID gains
-double Pa=0.01;
+double Pa=0.06;
 double Ia=0;
 double Da=0;
 
@@ -92,7 +92,7 @@ double Ia_fp=0.01;
 double Da_fp=0.5;
 
 //Yaw PID gains
-double Py=0;
+double Py=1;//1 : good
 double Dy=0;
 //--------------------------------------------------------
 
@@ -163,7 +163,7 @@ int main(int argc, char **argv){
 			ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
 			//if(yaw_limit==1500) y_d=0;//if angular_y_vel_desire is 0, y_d=0
 			rpyT_ctrl(r_d, p_d, y_d, T_d);
-			//rpyT_ctrl(0, 0, 0, T_d);
+			//rpyT_ctrl(0, 0, 0, 100);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
@@ -176,7 +176,7 @@ int main(int argc, char **argv){
 		 	PWM.publish(PWM_cmd);
 		 	break;             //Emergency break code
 		}
-			if(arr[5] <= 100) { // Emergency Stop
+			/*if(arr[5] <= 100) { // Emergency Stop
 		 	PWM_cmd.data.resize(4);
 		 	PWM_cmd.data[0]=100;//각 모터에 대한 PWM값
 		 	PWM_cmd.data[1]=100;
@@ -184,7 +184,7 @@ int main(int argc, char **argv){
 		 	PWM_cmd.data[3]=100;
 		 	PWM.publish(PWM_cmd);
 
-		}
+		}*/
 		//Publish data
 		PWM.publish(PWM_cmd);
 	
@@ -221,8 +221,8 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 //원하는 rpy,thrust값 받아서 PID제어. 롤,피치의 명령 토크 계산. 
 //롤,피치 명령 토크와 요 각도 편차를 이용하여 요 명령 토크 계산
 //계산된 롤피치요 명령 토크, 스러스트 값을 이용하여 PWM 변환
-	double e_r=roll_d-(imu_array[0]-0.7);
-	double e_p=pitch_d-(imu_array[1]+1.6);
+	double e_r=roll_d-(imu_array[0]-0.78);//offset settings-------------------
+	double e_p=pitch_d-(imu_array[1]-4.13);
 	double e_y=yaw_d-imu_array[2];
 	
 	if(e_y>180) e_y-=360;
