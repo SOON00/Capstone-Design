@@ -32,10 +32,10 @@ def msg_callback(msg):
         value = Float32MultiArray()
         value = msg.data
         
-        motor1 = value[4]-1000
-        motor2 = value[4]-1000
-        motor3 = value[4]-1000
-        motor4 = value[4]-1000
+        motor1 = value[3]-1000
+        motor2 = value[3]-1000
+        motor3 = value[3]-1000
+        motor4 = value[3]-1000
         motor1=constrain(motor1)
         motor2=constrain(motor2)
         motor3=constrain(motor3)
