@@ -82,9 +82,13 @@ double constrain(double F);
 double integ_limit=2;
 
 //Roll, Pitch PID gains
-double Pa=0.06;
+double Pr=3;//roll
+double Pp=1.5;//pitch
 double Ia=0;
 double Da=0;
+
+double Par=0.015;//angular roll
+double Pap=0.005;//angular pitch
 
 //Roll, Pitch PID gains (FP fix mode)
 double Pa_fp=3;
@@ -107,7 +111,6 @@ int main(int argc, char **argv){
 	ros::Publisher PWM=nh.advertise<std_msgs::Int16MultiArray>("PWM", 100);
 
 	//Subscriber
-	//ros::Subscriber RC_readings=nh.subscribe("/RC_readings", 100, &arrayCallback);
 
 	ros::Subscriber imu=nh.subscribe("/imu", 100, &imu_arrayCallback);
 
@@ -118,7 +121,7 @@ int main(int argc, char **argv){
 	int flag_imu=0;//monitoring imu's availability
 
 	while(ros::ok()){
-		if(arr[1]>1500){ // Emergency Stop
+		if(arr[5]>1500){ // Emergency Stop
 		 	flag_imu=0;
 
 		 	PWM_cmd.data.resize(4);
@@ -141,14 +144,13 @@ int main(int argc, char **argv){
 			}
 	
 			//TGP ctrl
-			r_d=rp_limit*(-(arr[5]-(double)1500)/(double)500);
+			r_d=rp_limit*(-(arr[4]-(double)1500)/(double)500);
             //목표 롤 각도 최대값 곱하기 -1or1 (수신기 신호를 -1~1로 맵핑하는 느낌)
-			p_d=rp_limit*(-(arr[3]-(double)1500)/(double)500);
+			p_d=rp_limit*(-(arr[2]-(double)1500)/(double)500);
             //목표 피치
-			if(fabs(arr[2]>1450 && arr[2]<1550)) {yaw_limit = 1500;}
-			else {yaw_limit = arr[2];}
+			if(fabs(arr[1]>1450 && arr[1]<1550)) {yaw_limit = 1500;}
+			else {yaw_limit = arr[1];}
 			y_d_tangent=y_vel_limit*((yaw_limit-(double)1500)/(double)500);
-			//y_d=rp_limit*(-(arr[2]-(double)1500)/(double)500);
             //목표 요 각속도
 			//if(fabs(y_d_tangent)<y_d_tangent_deadzone || fabs(y_d_tangent)>y_vel_limit) y_d_tangent=0;
             //데드존안에 있지 않거나 제한값을 초과할 때 요 각속도 0으로 하여 안정화
@@ -156,14 +158,12 @@ int main(int argc, char **argv){
 			if(y_d>180) y_d-=360;
 			else if (y_d<-180) y_d+=360; 
             //요 각속도를 더하여 목표 요 각도를 만들기
-			//T_d=T_limit*((arr[3]-(double)1500)/(double)500);
-			T_d=T_limit*(((double)1500-arr[4])/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
+			T_d=T_limit*(((double)1500-arr[3])/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
             //목표 추력
 
 			ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
 			//if(yaw_limit==1500) y_d=0;//if angular_y_vel_desire is 0, y_d=0
 			rpyT_ctrl(r_d, p_d, y_d, T_d);
-			//rpyT_ctrl(0, 0, 0, 100);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
@@ -176,7 +176,7 @@ int main(int argc, char **argv){
 		 	PWM.publish(PWM_cmd);
 		 	break;             //Emergency break code
 		}
-			/*if(arr[5] <= 100) { // Emergency Stop
+			/*if(arr[4] <= 100) { // Emergency Stop
 		 	PWM_cmd.data.resize(4);
 		 	PWM_cmd.data[0]=100;//각 모터에 대한 PWM값
 		 	PWM_cmd.data[1]=100;
@@ -185,9 +185,8 @@ int main(int argc, char **argv){
 		 	PWM.publish(PWM_cmd);
 
 		}*/
-		//Publish data
+
 		PWM.publish(PWM_cmd);
-	
 		ros::spinOnce();
 		loop_rate.sleep();	
 
@@ -216,14 +215,27 @@ void msg_callback(const std_msgs::Float32::ConstPtr &msg){
 	devo_data = msg->data;
 	return;
 }
-
+int PP=0;
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 //원하는 rpy,thrust값 받아서 PID제어. 롤,피치의 명령 토크 계산. 
 //롤,피치 명령 토크와 요 각도 편차를 이용하여 요 명령 토크 계산
 //계산된 롤피치요 명령 토크, 스러스트 값을 이용하여 PWM 변환
-	double e_r=roll_d-(imu_array[0]-0.78);//offset settings-------------------
-	double e_p=pitch_d-(imu_array[1]-4.13);
+	double e_r=roll_d-(imu_array[0]);//offset settings----------------
+	double e_p=pitch_d-(imu_array[1]-4);
 	double e_y=yaw_d-imu_array[2];
+	double angular_velocity_roll=imu_array[3];
+	double angular_velocity_pitch=imu_array[4];
+	/*
+	PP=arr[6];
+	
+	if(PP<1100) PP=1100;
+	if(PP>1900) PP=1900;
+	
+	PP-=1100;
+	PP/=50;//0~16
+	
+	Pr=0.06 + (float)PP/100;
+	//*/
 	
 	if(e_y>180) e_y-=360;
 	else if (e_y<-180) e_y+=360;
@@ -241,37 +253,35 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	tau_r_d=0;//롤 방향 목표 토크
 	tau_p_d=0;//피치 방향 목표 토크
 
-	//PID-fp_ctrl_off
-	// if(arr[4]<1500){//일반적인 PID 제어
-		//tau_r_d=Pa*e_r+Ia*e_r_i+Da*(-imu_array[3])+(double)0.3;
-		tau_r_d=Pa*e_r+Ia*e_r_i+Da*(imu_array[3]);
-        //롤 각도에 대한 목표 토크 PID로 구하기
-		//tau_p_d=Pa*e_p+Ia*e_p_i+Da*(-imu_array[4])+(double)0.2;
-		tau_p_d=Pa*e_p+Ia*e_p_i+Da*(-imu_array[4]);
-	// }
-	// else if(arr[4]>=1500){//Fixed Point모드 PID 제어 (다른 게인값 사용)
-	// 	tau_r_d=Pa_fp*e_r+Ia_fp*e_r_i+Da_fp*(-TGP_ang_vel.x)+(double)0.3;
-	// 	tau_p_d=Pa_fp*e_p+Ia_fp*e_p_i+Da_fp*(-TGP_ang_vel.y)+(double)0.2;;
-	// }	
-	double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
-	//tau_y_d=0;	//yaw controll off
+		//일반적인 PID 제어
+	//tau_r_d=Pr*e_r+Ia*e_r_i+Da*(-imu_array[3])+(double)0.3;
+	//tau_r_d=Pr*e_r+Ia*e_r_i+Da*(imu_array[3]);
+	tau_r_d=Par*(Pr*e_r-angular_velocity_roll)+Ia*e_r_i+Da*(imu_array[3]);
 	
+        	//롤 각도에 대한 목표 토크 PID로 구하기
+        	
+	//tau_p_d=Pp*e_p+Ia*e_p_i+Da*(-imu_array[4])+(double)0.2;
+	//tau_p_d=Pp*e_p+Ia*e_p_i+Da*(-imu_array[4]);
+	tau_p_d=Pap*(Pp*e_p+angular_velocity_pitch)+Ia*e_p_i+Da*(-imu_array[4]);
+
+	double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
 
 	//ROS_INFO("xvel:%lf, yvel:%lf, zvel:%lf", TGP_ang_vel.x, TGP_ang_vel.y, TGP_ang_vel.z);
 	//ROS_INFO("tr:%lf, tp:%lf, ty:%lf, Thrust_d:%lf", tau_r_d, tau_p_d, tau_y_d, Thrust_d);
+	ROS_INFO("Pa:%lf",Pr);
 	ud_to_PWM(tau_r_d, tau_p_d, tau_y_d, Thrust_d);
 }
 
 void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des){
 	
-    F1 = -(1.5625 * tau_r_des + 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F2 = -(1.5625 * tau_r_des - 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F3 = -(-1.5625 * tau_r_des - 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F4 = -(-1.5625 * tau_r_des + 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F1= constrain(F1);
-    F2= constrain(F2);
-    F3= constrain(F3);
-    F4= constrain(F4);
+	F1 = -(1.5625 * tau_r_des + 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
+	F2 = -(1.5625 * tau_r_des - 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
+	F3 = -(-1.5625 * tau_r_des - 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
+	F4 = -(-1.5625 * tau_r_des + 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
+	F1= constrain(F1);
+	F2= constrain(F2);
+	F3= constrain(F3);
+	F4= constrain(F4);
 	ROS_INFO("F1:%lf, F2:%lf, F3:%lf, F4:%lf", F1, F2, F3, F4);
 	PWM_cmd.data.resize(4);
 	PWM_cmd.data[0]=Force_to_PWM(F1,Thrust_des);
@@ -280,37 +290,18 @@ void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thru
 	PWM_cmd.data[3]=Force_to_PWM(F4,Thrust_des);
 	//ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM_cmd.data[0], PWM_cmd.data[1], PWM_cmd.data[2], PWM_cmd.data[3]);
 }
+
 double constrain(double F){
     if(F<=0) return 0;
     else if(F>1600) return 1600;
     else return F;
 }
-double Force_to_PWM(double F, double Thrust){//0<Thrust<200  {(0~200)*4 +100}
-//힘을 PWM으로 바꿔줘야하는데 이건 실험을 해봐야 할 듯...?
-	double param1=1111.07275742670;
-	double param2=44543.2632092715;
-	double param3=6112.46876873481;
-	//Force=0.0000224500839846839*PWM^2-0.049887353434648*PWM+27.577014233466
-	//PWM=1111.07275742670+(44543.2632092715*Force+6112.46876873481)^0.5
 
-	double pwm=param1+sqrt(param2*F+param3);
-	if(pwm>1880)	{pwm=1880;}
-	//pwm=((pwm-1111)*800)/769+100;
-	
-	pwm=100 + ((F+25)/50)*800;
-	
-	pwm=sqrt((F+243.1144)/0.0012)-343.9167;
-	
-	Thrust=100+Thrust*4;
-	if((Thrust+100)<pwm) pwm=Thrust+100;
-	else if((Thrust-100)>pwm) pwm=Thrust-100;
-	if(pwm>=900) pwm=900;
-	
-	pwm=sqrt((32*F+243.1144)/0.0012)-343.9167;
+double Force_to_PWM(double F, double Thrust){
+
+	double pwm=sqrt((32*F+243.1144)/0.0012)-343.9167;
 	if(pwm<=100)	{pwm=100;}
 	if(pwm>=900)	{pwm=900;}
-	//pwm=arr[3]-1400 + ((F+25)/50)*(2400-arr[3]);
-
 
 	return pwm;
 }
