@@ -82,13 +82,14 @@ double constrain(double F);
 double integ_limit=2;
 
 //Roll, Pitch PID gains
-double Pr=3;//roll
-double Pp=1.5;//pitch
+double Pr=2;//roll
+double Pp=3;//pitch
 double Ia=0;
 double Da=0;
+double Dp=0;
 
-double Par=0.015;//angular roll
-double Pap=0.005;//angular pitch
+double Par=0.01;//angular roll
+double Pap=0.015;//angular pitch
 
 //Roll, Pitch PID gains (FP fix mode)
 double Pa_fp=3;
@@ -216,6 +217,8 @@ void msg_callback(const std_msgs::Float32::ConstPtr &msg){
 	return;
 }
 int PP=0;
+double pitch_D=0;
+double prev_pitch_D=0;
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 //원하는 rpy,thrust값 받아서 PID제어. 롤,피치의 명령 토크 계산. 
 //롤,피치 명령 토크와 요 각도 편차를 이용하여 요 명령 토크 계산
@@ -225,6 +228,10 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	double e_y=yaw_d-imu_array[2];
 	double angular_velocity_roll=imu_array[3];
 	double angular_velocity_pitch=imu_array[4];
+	
+	double rate_error = Pr*e_r-angular_velocity_roll;
+	
+	
 	/*
 	PP=arr[6];
 	
@@ -256,13 +263,14 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 		//일반적인 PID 제어
 	//tau_r_d=Pr*e_r+Ia*e_r_i+Da*(-imu_array[3])+(double)0.3;
 	//tau_r_d=Pr*e_r+Ia*e_r_i+Da*(imu_array[3]);
-	tau_r_d=Par*(Pr*e_r-angular_velocity_roll)+Ia*e_r_i+Da*(imu_array[3]);
+	//tau_r_d=Par*(Pr*e_r-angular_velocity_roll)+Ia*e_r_i+Da*(imu_array[3]);
+	tau_r_d=Par*(Pr*e_r-angular_velocity_roll)+Ia*e_r_i;
 	
         	//롤 각도에 대한 목표 토크 PID로 구하기
         	
-	//tau_p_d=Pp*e_p+Ia*e_p_i+Da*(-imu_array[4])+(double)0.2;
-	//tau_p_d=Pp*e_p+Ia*e_p_i+Da*(-imu_array[4]);
-	tau_p_d=Pap*(Pp*e_p+angular_velocity_pitch)+Ia*e_p_i+Da*(-imu_array[4]);
+	//tau_p_d=Pp*e_p+Ia*e_p_i+Dp*(-imu_array[4])+(double)0.2;
+	//tau_p_d=Pp*e_p+Ia*e_p_i+Dp*(-imu_array[4]);
+	tau_p_d=Pap*(Pp*e_p+angular_velocity_pitch)+Ia*e_p_i+Dp*(-imu_array[4]);
 
 	double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
 
