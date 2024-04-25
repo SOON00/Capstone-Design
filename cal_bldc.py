@@ -9,13 +9,13 @@ from rospy.numpy_msg import numpy_msg
 
 bldc=Adafruit_PCA9685.PCA9685()
 
-servoMin=205
-servoMax=450
+servoMin=1640
+servoMax=3200
 def constrain(x):
-    if x>=900:
-        x=900
-    elif x<=100:
-        x=100
+    if x>=1800:
+        x=1800
+    elif x<=200:
+        x=200
     return x
 def map(value,min_angle,max_angle,min_pulse,max_pulse):
     angle_range=max_angle-min_angle
@@ -24,7 +24,7 @@ def map(value,min_angle,max_angle,min_pulse,max_pulse):
     return min_pulse+(value/scale_factor)
     
 def set_angle(channel,angle):
-    pulse=int(map(angle,100,900,servoMin,servoMax))
+    pulse=int(map(angle,200,1800,servoMin,servoMax))
     bldc.set_pwm(channel,0,pulse)
 
 def msg_callback(msg):
@@ -32,10 +32,11 @@ def msg_callback(msg):
         value = Float32MultiArray()
         value = msg.data
         
-        motor1 = value[3]-1000
-        motor2 = value[3]-1000
-        motor3 = value[3]-1000
-        motor4 = value[3]-1000
+        
+        motor1 = 2*(value[3]-1000)
+        motor2 = 2*(value[3]-1000)
+        motor3 = 2*(value[3]-1000)
+        motor4 = 2*(value[3]-1000)
         motor1=constrain(motor1)
         motor2=constrain(motor2)
         motor3=constrain(motor3)
@@ -49,7 +50,7 @@ def msg_callback(msg):
     except ValueError:
         print("error")
 
-bldc.set_pwm_freq(60)
+bldc.set_pwm_freq(400)
 
 if __name__ == '__main__':
     rospy.init_node('array_sub')
