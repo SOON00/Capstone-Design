@@ -299,9 +299,9 @@ double constrain(double F){
 
 double Force_to_PWM(double F, double Thrust){
 
-	double pwm=sqrt((32*F+243.1144)/0.0012)-343.9167;
-	if(pwm<=100)	{pwm=100;}
-	if(pwm>=900)	{pwm=900;}
+	double pwm=2*(sqrt((32*F+243.1144)/0.0012)-343.9167);
+	if(pwm<=200)	{pwm=200;}
+	if(pwm>=1800)	{pwm=1800;}
 
 	return pwm;
 }
