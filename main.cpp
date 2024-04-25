@@ -30,8 +30,8 @@ void setServo(int channel, int pulse_width) {
     pca9685.setPWM(channel, 0, pulse_width);
 }
 
-int min_pulse = 205;
-int max_pulse = 450;
+int min_pulse = 1640;//1640
+int max_pulse = 3200;//3200
 
 int motor1,motor2,motor3,motor4;
 int main(int argc, char* argv[]) {
@@ -55,10 +55,10 @@ int main(int argc, char* argv[]) {
     pca9685.setPWM(3, 0, min_pulse);
     sleep(10);*/
     while(ros::ok()){
-        motor1=mapping(PWM[0],100, 900,min_pulse,max_pulse);
-        motor2=mapping(PWM[1],100, 900,min_pulse,max_pulse);
-        motor3=mapping(PWM[2],100, 900,min_pulse,max_pulse);
-        motor4=mapping(PWM[3],100, 900,min_pulse,max_pulse);
+        motor1=mapping(PWM[0],200, 1800,min_pulse,max_pulse);
+        motor2=mapping(PWM[1],200, 1800,min_pulse,max_pulse);
+        motor3=mapping(PWM[2],200, 1800,min_pulse,max_pulse);
+        motor4=mapping(PWM[3],200, 1800,min_pulse,max_pulse);
         
         pca9685.setPWM(0, 0, motor1);
         pca9685.setPWM(1, 0, motor2);
