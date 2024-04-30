@@ -1,120 +1,56 @@
 #!/usr/bin/env python
 
-import time
-import Adafruit_PCA9685
 import rospy
-import math
-from std_msgs.msg import Int32
-import threading
-import serial
+from sensor_msgs.msg import Imu
+from std_msgs.msg import Header
+import pyrealsense2 as rs
+import numpy as np
 
-roll,pitch,yaw=0.0,0.0,0.0
-gX,gY,gZ=0.0,0.0,0.0
+def initialize_camera():
+    # start the frames pipe
+    p = rs.pipeline()
+    conf = rs.config()
+    conf.enable_stream(rs.stream.accel)
+    conf.enable_stream(rs.stream.gyro)
+    prof = p.start(conf)
+    return p
 
-#PID Variables
-r_Iterm=0
-r_stab_Iterm=0
-roll_output=0
+def gyro_data(gyro):
+    return np.asarray([gyro.x, gyro.y, gyro.z])
 
-p_Iterm=0
-p_stab_Iterm=0
-pitch_output=0
+def accel_data(accel):
+    return np.asarray([accel.x, accel.y, accel.z])
 
-def pid(pid_target,stabilize_kp,stabilize_ki,rate_kp,rate_ki,rpy_angle,gyro,stabilize_Iterm,rate_Iterm):
-    angle_error = pid_target-float(rpy_angle)
-    
-    stabilize_Pterm=stabilize_kp*angle_error
-    stabilize_Iterm+=stabilize_ki*angle_error*0.001
-    
-    desired_rate = stabilize_Pterm
-    
-    rate_error = desired_rate-float(gyro)
-    
-    rate_Pterm = rate_kp*rate_error
-    rate_Iterm = rate_ki*rate_error*0.001
+def publish_imu_data(camera_pipe):
+    rospy.init_node('d455_imu_publisher', anonymous=True)
+    pub = rospy.Publisher('imu/data_raw', Imu, queue_size=10)
+    rate = rospy.Rate(200)  # 200Hz
 
-    output=int(rate_Pterm+rate_Iterm+stabilize_Iterm)
-    
-    return output,stabilize_Iterm,rate_Iterm
+    while not rospy.is_shutdown():
+        f = camera_pipe.wait_for_frames()
+        accel = accel_data(f[0].as_motion_frame().get_motion_data())
+        gyro = gyro_data(f[1].as_motion_frame().get_motion_data())
 
+        imu_msg = Imu()
+        imu_msg.header = Header()
+        imu_msg.header.stamp = rospy.Time.now()
+        imu_msg.header.frame_id = 'imu_link'
 
+        imu_msg.linear_acceleration.x = accel[0]
+        imu_msg.linear_acceleration.y = accel[1]
+        imu_msg.linear_acceleration.z = accel[2]
 
-bldc=Adafruit_PCA9685.PCA9685()
-ser = serial.Serial('/dev/ttyUSB1',115200)
-
-servoMin=150
-servoMax=550
-def constrain_value(value):
-    if value >= 900:
-        return 900
-    elif value <= 100:
-        return 100
-    else:
-        return value
-    
-def map(value,min_angle,max_angle,min_pulse,max_pulse):
-    angle_range=max_angle-min_angle
-    pulse_range=max_pulse-min_pulse
-    scale_factor=float(angle_range)/float(pulse_range)
-    return min_pulse+(value/scale_factor)
-    
-def set_angle(channel,angle):
-    pulse=int(map(angle,0,1000,servoMin,servoMax))
-    bldc.set_pwm(channel,0,pulse)
-    
-motor1,motor2,motor3,motor4=0,0,0,0
-def msg_callback(msg):
-    global motor1,motor2,motor3,motor4
-    try:
-        value = int(msg.data)
-        value = int((value-1000))
-        motor1 = value+roll_output+pitch_output
-        motor1 = constrain_value(motor1)
-        motor2 = value+roll_output-pitch_output
-        motor2 = constrain_value(motor2)
-        motor3 = value-roll_output-pitch_output
-        motor3 = constrain_value(motor3)
-        motor4 = value-roll_output+pitch_output
-        motor4 = constrain_value(motor4)
+        imu_msg.angular_velocity.x = gyro[0]
+        imu_msg.angular_velocity.y = gyro[1]
+        imu_msg.angular_velocity.z = gyro[2]
         
-        set_angle(1, motor1)
-        set_angle(2, motor2)
-        set_angle(3, motor3)
-        set_angle(0, motor4)
-        
-        print(value)
-    except ValueError:
-        print("error")
-        
-def imu_data():
-    global roll_output,pitch_output,r_Iterm,r_stab_Iterm,p_Iterm,p_stab_Iterm
-    global motor1,motor2,motor3,motor4
-    while True:
-        if ser.in_waiting > 0:
-            received_data = ser.readline().decode().rstrip()
-            received_data = received_data.replace("*","")
-            split_data = received_data.split(',')
-            print(split_data)
-            try:        #pid(pid_target,stabilize_kp,stabilize_ki,rate_kp,rate_ki,rpy_angle,gyro,stabilize_Iterm,rate_Iterm):
-                roll,pitch,yaw=split_data[0],split_data[1],split_data[2]
-                gX,gY,gZ=split_data[3],split_data[4],split_data[5]
-                roll_output,r_stab_Iterm,r_Iterm=pid(0,1,0,1,0,roll,gX,r_stab_Iterm,r_Iterm)
-                pitch_output,p_stab_Iterm,p_Iterm=pid(0,1,0,1,0,pitch,gY,p_stab_Iterm,p_Iterm)
-            except:
-                continue
-            #print(roll,pitch,yaw)
-
-        
-
-            
-
-bldc.set_pwm_freq(60)        
+        imu_msg.orientation_covariance = [-1]*9
+        pub.publish(imu_msg)
+        rate.sleep()
 
 if __name__ == '__main__':
-    rospy.init_node('topic_sub_node')
-    sub = rospy.Subscriber('/channel_5',Int32,msg_callback,queue_size=3)
-    imu_thread = threading.Thread(target=imu_data)
-    imu_thread.start()
-    imu_thread.join()
-
-    rospy.spin()
+    try:
+        camera_pipe = initialize_camera()
+        publish_imu_data(camera_pipe)
+    except rospy.ROSInterruptException:
+        pass
