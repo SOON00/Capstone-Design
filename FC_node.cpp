@@ -128,8 +128,8 @@ double Pap=0.015;//angular pitch
 double Py=1;//1 : good
 double Dy=0;
 
-dualPIDController tau_Roll(2,0,0,1,0,0);
-dualPIDController tau_Pitch(2,0,0,1,0,0);
+dualPIDController tau_Roll(3,0,0.5,1.2,0,0);
+dualPIDController tau_Pitch(2,0,0.1,1,0,0);
 //--------------------------------------------------------
 
 //Main====================================================
@@ -278,7 +278,7 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
 	double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
 	
-	double tau_Roll_input = tau_Roll.calculate(0, imu_array[0]*PI/180, imu_array[3]*PI/180,0.005);
+	double tau_Roll_input = tau_Roll.calculate(0, (imu_array[0]+10)*PI/180, imu_array[3]*PI/180,0.005);
 	double tau_Pitch_input = tau_Pitch.calculate(0, imu_array[1]*PI/180, -imu_array[4]*PI/180,0.005);
 
 	//ROS_INFO("Roll :%lf, Pitch :%lf, ty:%lf, Thrust_d:%lf", tau_r_d, tau_p_d, tau_y_d, Thrust_d);
