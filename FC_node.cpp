@@ -258,9 +258,8 @@ void imu_arrayCallback(const sensor_msgs::Imu::ConstPtr &imu_raw){
 void imu_qCallback(const tf2_msgs::TFMessage::ConstPtr &tf_msg){
 	if (!tf_msg->transforms.empty()){
 	    q = tf_msg->transforms[0].transform.rotation;
-	    //tf::Matrix3x3 mat(tf::Quaternion(q.x,q.y,q.z,q.w));
-	    //mat.getRPY(q.x,q.y,q.z);
-	    q.w = atan2((q.y*q.z+q.w*q.x),(double)0.5-(q.x*q.x+q.y*q.y));
+	    tf::Matrix3x3 mat(tf::Quaternion(q.x,q.y,q.z,q.w));
+	    mat.getRPY(q.x,q.y,q.z);
 	}
 }
 
