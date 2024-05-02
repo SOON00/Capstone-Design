@@ -98,7 +98,6 @@ public:
 double freq=200;//controller loop frequency 0.005s
 
 int arr[7];//0:roll, 1:pitch, 2:yaw, 3:thrust, 4:3-step switch 
-float imu_array[6];
 
 //Commands================================================
 
@@ -137,7 +136,7 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d);
 void imu_RPY_Callback(const tf2_msgs::TFMessage::ConstPtr &tf_msg);
 double constrain(double F);
 //--------------------------------------------------------
-
+int thrust = 0;
 
 //Control gains===========================================
 
@@ -149,10 +148,17 @@ double Py=1;//1 : good
 double Dy=0;
 
 //Roll, Pitch controller
-dualPIDController tau_Roll(3,0,0.5,1.2,0,0);
-dualPIDController tau_Pitch(3,0,0.5,1.2,0,0);
+dualPIDController tau_Roll(2,0,0,1,0,0);
+dualPIDController tau_Pitch(2,0,0,1,0,0);
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
+
+double roll_angle=0;
+double pitch_angle=0;
+double yaw_angle=0;
+double roll_vel=0;
+double pitch_vel=0;
+double yaw_vel=0;
 
 //Main====================================================
 
@@ -186,9 +192,10 @@ int main(int argc, char **argv){
 		 else{//5번 스위치 작동
 			//Initialize desired yaw
 			if(flag_imu!=1){
-				y_d=imu_array[2];//initial desired yaw setting
+				y_d=yaw_angle;//initial desired yaw setting
 				flag_imu=1;
 			}
+			
 			r_d=rp_limit*(-(arr[4]-(double)1500)/(double)500);
             //목표 롤 각도 최대값 곱하기 -1or1 (수신기 신호를 -1~1로 맵핑)
 			p_d=rp_limit*(-(arr[2]-(double)1500)/(double)500);
@@ -206,15 +213,17 @@ int main(int argc, char **argv){
 			else if (y_d<-180) y_d+=360; 
             //요 각속도를 더하여 목표 요 각도를 만들기
             
-			T_d=T_limit*(((double)1500-arr[3])/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
+			thrust = arr[3];
+			T_d=T_limit*(((double)1500-thrust)/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
             //목표 추력
 
 			ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
+			ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
 			rpyT_ctrl(r_d, p_d, y_d, T_d);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
-			if(fabs(imu_array[0])>35 || fabs(imu_array[1])>35) { // Emergency Stop
+			if(fabs(roll_angle)>1 || fabs(pitch_angle)>1) { // Emergency Stop
 		 	PWM_cmd.data.resize(4);
 		 	PWM_cmd.data[0]=200;
 		 	PWM_cmd.data[1]=200;
@@ -254,19 +263,22 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
 
 void imu_ang_vel_Callback(const sensor_msgs::Imu::ConstPtr &imu_raw){
 	RPY_ang_vel = imu_raw->angular_velocity;
+	roll_vel=RPY_ang_vel.x;
+	pitch_vel=RPY_ang_vel.y;
+	yaw_vel=RPY_ang_vel.z;
 }
 
 void imu_RPY_Callback(const tf2_msgs::TFMessage::ConstPtr &tf_msg){
-	if (!tf_msg->transforms.empty()){
-	    q = tf_msg->transforms[0].transform.rotation;
-	    tf::Matrix3x3 mat(tf::Quaternion(q.x,q.y,q.z,q.w));
-	    mat.getRPY(q.x,q.y,q.z);
-	}
+
+    q = tf_msg->transforms[0].transform.rotation;
+    tf::Matrix3x3 mat(tf::Quaternion(q.x,q.y,q.z,q.w));
+    mat.getRPY(roll_angle,pitch_angle,yaw_angle);
+	
 }
 
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
-	double e_y=yaw_d+q.z;
+	double e_y=yaw_d+yaw_angle;
 	
 	if(e_y>3.141592) e_y-=6.283185;
 	else if (e_y<-3.141592) e_y+=6.283185;
@@ -277,9 +289,9 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	//double tau_Pitch_input = tau_Pitch.calculate(0, imu_array[1]*PI/180, -imu_array[4]*PI/180,0.005);
 	
 	//realsense imu code
-	double tau_y_d=Py*e_y+Dy*(RPY_ang_vel.z);
-	double tau_Roll_input = tau_Roll.calculate(0, -q.x, RPY_ang_vel.x,0.005);
-	double tau_Pitch_input = tau_Pitch.calculate(0, -q.y, RPY_ang_vel.y,0.005);
+	double tau_y_d=Py*e_y+Dy*(-yaw_vel);
+	double tau_Roll_input = tau_Roll.calculate(0, -roll_angle, -roll_vel,0.005);
+	double tau_Pitch_input = tau_Pitch.calculate(0, pitch_angle, pitch_vel,0.005);
 
 	//ROS_INFO("Roll :%lf, Pitch :%lf, ty:%lf, Thrust_d:%lf", tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
 
