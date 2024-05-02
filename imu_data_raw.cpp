@@ -61,6 +61,6 @@ void publish_imu_data(rs2::pipeline& camera_pipe, int argc, char** argv) { // ar
 int main(int argc, char** argv) {
     rs2::pipeline camera_pipe;
     camera_pipe = initialize_camera();
-    publish_imu_data(camera_pipe, argc, argv); // argc와 argv를 publish_imu_data 함수에 전달
+    publish_imu_data(camera_pipe, argc, argv);
     return 0;
 }

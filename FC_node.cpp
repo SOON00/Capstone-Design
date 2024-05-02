@@ -119,8 +119,8 @@ double T_d=0;//desired thrust                 목표 스러스트
 
 //General parameters======================================
 
-static double rp_limit=10;//(degree)       롤피치 각도제한 
-static double y_vel_limit=0.1;//(degree/s) 요 각속도 제한
+static double rp_limit=0.2;//(rad)       롤피치 각도제한 
+static double y_vel_limit=0.01;//(rad/s) 요 각속도 제한
 static double y_d_tangent_deadzone=(double)0.05*y_vel_limit;//(rad/s)
 //작은 오차에 의한 드론의 움직임 방지
 static double T_limit=100;//(N)           추력 제한
@@ -130,11 +130,11 @@ static double yaw_limit=0;
 
 //Function declaration====================================
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
-void imu_arrayCallback(const sensor_msgs::Imu::ConstPtr &imu_raw);
+void imu_ang_vel_Callback(const sensor_msgs::Imu::ConstPtr &imu_raw);
 void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des);
 double Force_to_PWM(double F, double Thrust);
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d);
-void imu_qCallback(const tf2_msgs::TFMessage::ConstPtr &tf_msg);
+void imu_RPY_Callback(const tf2_msgs::TFMessage::ConstPtr &tf_msg);
 double constrain(double F);
 //--------------------------------------------------------
 
@@ -151,6 +151,7 @@ double Dy=0;
 //Roll, Pitch controller
 dualPIDController tau_Roll(3,0,0.5,1.2,0,0);
 dualPIDController tau_Pitch(3,0,0.5,1.2,0,0);
+PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
 //Main====================================================
@@ -163,8 +164,8 @@ int main(int argc, char **argv){
 	ros::Publisher PWM=nh.advertise<std_msgs::Int16MultiArray>("PWM", 100);
 
 	//Subscriber
-	ros::Subscriber imu_raw=nh.subscribe("/imu/data_raw", 100, &imu_arrayCallback);
-	ros::Subscriber tf_msg=nh.subscribe("/tf", 100, &imu_qCallback);
+	ros::Subscriber imu_raw=nh.subscribe("/imu/data_raw", 100, &imu_ang_vel_Callback);
+	ros::Subscriber tf_msg=nh.subscribe("/tf", 100, &imu_RPY_Callback);
 	ros::Subscriber devo=nh.subscribe("/PPM", 100, &arrayCallback);
 
 	ros::Rate loop_rate(200);
@@ -208,7 +209,7 @@ int main(int argc, char **argv){
 			T_d=T_limit*(((double)1500-arr[3])/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
             //목표 추력
 
-			ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", q.x, q.y, q.z, q.w);
+			ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
 			rpyT_ctrl(r_d, p_d, y_d, T_d);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
@@ -251,11 +252,11 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
 	return;
 }
 
-void imu_arrayCallback(const sensor_msgs::Imu::ConstPtr &imu_raw){
+void imu_ang_vel_Callback(const sensor_msgs::Imu::ConstPtr &imu_raw){
 	RPY_ang_vel = imu_raw->angular_velocity;
 }
 
-void imu_qCallback(const tf2_msgs::TFMessage::ConstPtr &tf_msg){
+void imu_RPY_Callback(const tf2_msgs::TFMessage::ConstPtr &tf_msg){
 	if (!tf_msg->transforms.empty()){
 	    q = tf_msg->transforms[0].transform.rotation;
 	    tf::Matrix3x3 mat(tf::Quaternion(q.x,q.y,q.z,q.w));
@@ -265,15 +266,20 @@ void imu_qCallback(const tf2_msgs::TFMessage::ConstPtr &tf_msg){
 
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
-	double e_y=yaw_d-imu_array[2];
+	double e_y=yaw_d+q.z;
 	
-	if(e_y>180) e_y-=360;
-	else if (e_y<-180) e_y+=360;
+	if(e_y>3.141592) e_y-=6.283185;
+	else if (e_y<-3.141592) e_y+=6.283185;
 
-	double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
+	//previous imu code
+	//double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
+	//double tau_Roll_input = tau_Roll.calculate(0, (imu_array[0]+10)*PI/180, imu_array[3]*PI/180,0.005);
+	//double tau_Pitch_input = tau_Pitch.calculate(0, imu_array[1]*PI/180, -imu_array[4]*PI/180,0.005);
 	
-	double tau_Roll_input = tau_Roll.calculate(0, (imu_array[0]+10)*PI/180, imu_array[3]*PI/180,0.005);
-	double tau_Pitch_input = tau_Pitch.calculate(0, imu_array[1]*PI/180, -imu_array[4]*PI/180,0.005);
+	//realsense imu code
+	double tau_y_d=Py*e_y+Dy*(RPY_ang_vel.z);
+	double tau_Roll_input = tau_Roll.calculate(0, -q.x, RPY_ang_vel.x,0.005);
+	double tau_Pitch_input = tau_Pitch.calculate(0, -q.y, RPY_ang_vel.y,0.005);
 
 	//ROS_INFO("Roll :%lf, Pitch :%lf, ty:%lf, Thrust_d:%lf", tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
 
