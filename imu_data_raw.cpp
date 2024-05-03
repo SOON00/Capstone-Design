@@ -49,7 +49,7 @@ void publish_imu_data(rs2::pipeline& camera_pipe, int argc, char** argv) { // ar
         imu_msg.linear_acceleration.z = -accel_data_array[1];
 
         imu_msg.angular_velocity.x = gyro_data_array[2];
-        imu_msg.angular_velocity.y = -gyro_data_array[0];
+        imu_msg.angular_velocity.y = gyro_data_array[0];
         imu_msg.angular_velocity.z = -gyro_data_array[1];
 
         pub.publish(imu_msg);
