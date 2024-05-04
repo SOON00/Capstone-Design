@@ -38,9 +38,11 @@ private:
     double prevError;
     double angle_integral;
     double rate_integral;
+    
+    double i_limit;
 public:
     dualPIDController(double angle_p, double angle_i, double angle_d, double rate_p, double rate_i, double rate_d) :
-    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0) {}
+    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(2) {}
     double calculate(double target, double angle_input, double rate_input, double dt){
         double angle_error = target - angle_input;
         
@@ -52,11 +54,13 @@ public:
         double rate_P_term = rate_Kp*rate_error;
         
         rate_integral += rate_error*dt;
+        if(fabs(rate_integral)>i_limit)	rate_integral=(rate_integral/fabs(rate_integral))*i_limit;
         double rate_I_term = rate_Ki * rate_integral;
         
         double rate_D_term = rate_Kd * (rate_error-prevError)/dt;
         
         angle_integral += angle_error*dt;
+        if(fabs(angle_integral)>i_limit)	angle_integral=(angle_integral/fabs(angle_integral))*i_limit;
         double angle_I_term = angle_Ki * angle_integral;
         
         double angle_D_term = angle_Kd * rate_input;
@@ -129,11 +133,10 @@ static double yaw_limit=0;
 
 //Function declaration====================================
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
-void imu_ang_vel_Callback(const sensor_msgs::Imu::ConstPtr &imu_raw);
 void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des);
 double Force_to_PWM(double F, double Thrust);
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d);
-void imu_RPY_Callback(const tf2_msgs::TFMessage::ConstPtr &tf_msg);
+void imu_RPY_Callback(const sensor_msgs::Imu::ConstPtr &imu_data);
 double constrain(double F);
 //--------------------------------------------------------
 int thrust = 0;
@@ -149,8 +152,7 @@ double Dy=0;
 
 //Roll, Pitch controller
 dualPIDController tau_Roll(2,0,0,1,0,0);
-dualPIDController tau_Pitch(3,0,0,0.8,0,0);
-PIDController tau_Pitch2(5,0,0);
+dualPIDController tau_Pitch(2,0,0.5,1,0,0);
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
@@ -171,8 +173,7 @@ int main(int argc, char **argv){
 	ros::Publisher PWM=nh.advertise<std_msgs::Int16MultiArray>("PWM", 100);
 
 	//Subscriber
-	ros::Subscriber imu_raw=nh.subscribe("/imu/data_raw", 100, &imu_ang_vel_Callback);
-	ros::Subscriber tf_msg=nh.subscribe("/tf", 10, &imu_RPY_Callback);
+	ros::Subscriber imu_data=nh.subscribe("/imu_data", 100, &imu_RPY_Callback);
 	ros::Subscriber devo=nh.subscribe("/PPM", 100, &arrayCallback);
 
 	ros::Rate loop_rate(200);
@@ -197,7 +198,7 @@ int main(int argc, char **argv){
 				flag_imu=1;
 			}
 			
-			r_d=rp_limit*(-(arr[4]-(double)1500)/(double)500);
+			r_d=rp_limit*((arr[4]-(double)1500)/(double)500);
             //목표 롤 각도 최대값 곱하기 -1or1 (수신기 신호를 -1~1로 맵핑)
 			p_d=rp_limit*(-(arr[2]-(double)1500)/(double)500);
             //목표 피치
@@ -209,7 +210,7 @@ int main(int argc, char **argv){
 			//if(fabs(y_d_tangent)<y_d_tangent_deadzone || fabs(y_d_tangent)>y_vel_limit) y_d_tangent=0;
             //데드존안에 있지 않거나 제한값을 초과할 때 요 각속도 0으로 하여 안정화
             
-			y_d+=y_d_tangent;
+			y_d-=y_d_tangent;
 			if(y_d>180) y_d-=360;
 			else if (y_d<-180) y_d+=360; 
             //요 각속도를 더하여 목표 요 각도를 만들기
@@ -262,18 +263,16 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
 	return;
 }
 
-void imu_ang_vel_Callback(const sensor_msgs::Imu::ConstPtr &imu_raw){
-	RPY_ang_vel = imu_raw->angular_velocity;
-	roll_vel=RPY_ang_vel.x;
-	pitch_vel=RPY_ang_vel.y;
-	yaw_vel=RPY_ang_vel.z;
-}
 double yaw_nav_prev=0;
 int yaw_nav_count=0;
-void imu_RPY_Callback(const tf2_msgs::TFMessage::ConstPtr &tf_msg){
-
-    q = tf_msg->transforms[0].transform.rotation;
-    tf::Matrix3x3 mat(tf::Quaternion(q.x,q.y,q.z,q.w));
+void imu_RPY_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
+    RPY_ang_vel = imu_data->angular_velocity;
+    roll_vel=RPY_ang_vel.x;
+    pitch_vel=RPY_ang_vel.y;
+    yaw_vel=RPY_ang_vel.z;
+    q = imu_data->orientation;
+    //q = tf_msg->transforms[0].transform.rotation;
+    //tf::Matrix3x3 mat(tf::Quaternion(q.x,q.y,q.z,q.w));
     //mat.getRPY(roll_angle,pitch_angle,yaw_angle);
     
     //roll
@@ -298,7 +297,7 @@ void imu_RPY_Callback(const tf2_msgs::TFMessage::ConstPtr &tf_msg){
 
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
-	double e_y=yaw_d+yaw_angle;
+	double e_y=yaw_d-yaw_angle;
 	
 	//if(e_y>3.141592) e_y-=6.283185;
 	//else if (e_y<-3.141592) e_y+=6.283185;
@@ -309,9 +308,9 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	//double tau_Pitch_input = tau_Pitch.calculate(0, imu_array[1]*PI/180, -imu_array[4]*PI/180,0.005);
 	
 	//realsense imu code
-	double tau_y_d=Py*e_y+Dy*(-yaw_vel);
+	double tau_y_d=-Py*e_y+Dy*(-yaw_vel);
 	double tau_Roll_input = tau_Roll.calculate(0, -roll_angle, -roll_vel,0.005);
-	double tau_Pitch_input = tau_Pitch.calculate(0, -pitch_angle, -pitch_vel,0.005);
+	double tau_Pitch_input = tau_Pitch.calculate(0, pitch_angle, pitch_vel,0.005);
 
 	//ROS_INFO("Roll :%lf, Pitch :%lf, ty:%lf, Thrust_d:%lf", tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
 
