@@ -133,10 +133,10 @@ static double yaw_limit=0;
 
 //Function declaration====================================
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
-void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des);
+void tau_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des);
 double Force_to_PWM(double F, double Thrust);
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d);
-void imu_RPY_Callback(const sensor_msgs::Imu::ConstPtr &imu_data);
+void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data);
 double constrain(double F);
 //--------------------------------------------------------
 int thrust = 0;
@@ -173,7 +173,7 @@ int main(int argc, char **argv){
 	ros::Publisher PWM=nh.advertise<std_msgs::Int16MultiArray>("PWM", 100);
 
 	//Subscriber
-	ros::Subscriber imu_data=nh.subscribe("/imu_data", 100, &imu_RPY_Callback);
+	ros::Subscriber imu_data=nh.subscribe("/imu_data", 100, &imu_Callback);
 	ros::Subscriber devo=nh.subscribe("/PPM", 100, &arrayCallback);
 
 	ros::Rate loop_rate(200);
@@ -265,48 +265,35 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
 
 double yaw_nav_prev=0;
 int yaw_nav_count=0;
-void imu_RPY_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
+void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
     RPY_ang_vel = imu_data->angular_velocity;
     roll_vel=RPY_ang_vel.x;
     pitch_vel=RPY_ang_vel.y;
     yaw_vel=RPY_ang_vel.z;
     q = imu_data->orientation;
-    //q = tf_msg->transforms[0].transform.rotation;
-    //tf::Matrix3x3 mat(tf::Quaternion(q.x,q.y,q.z,q.w));
-    //mat.getRPY(roll_angle,pitch_angle,yaw_angle);
     
     //roll
-        roll_angle=atan2((q.y*q.z+q.w*q.x),(double)0.5-(q.x*q.x+q.y*q.y));//roll
-	
-	//pitch        
-	double temp_y=(-(double)2*(q.x*q.z-q.w*q.y));
-        //if(fabs(temp_y)>0.9999) temp_y=(temp_y/fabs(temp_y))*0.9999;
-        pitch_angle=asin(temp_y);//pitch 
-	
-	//yaw
-	double temp_z=atan2((q.x*q.y+q.w*q.z),(double)0.5-(q.y*q.y+q.z*q.z));
-	if(fabs(temp_z-yaw_nav_prev)>3.141592){
-		if(temp_z>=0)		yaw_nav_count-=1;
-		else if(temp_z<0)	yaw_nav_count+=1;
-	}		
-        yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
-	yaw_nav_prev=temp_z;
+    roll_angle=atan2((q.y*q.z+q.w*q.x),(double)0.5-(q.x*q.x+q.y*q.y));//roll
     
+    //pitch        
+    double temp_y=(-(double)2*(q.x*q.z-q.w*q.y));
+    //if(fabs(temp_y)>0.9999) temp_y=(temp_y/fabs(temp_y))*0.9999;
+    pitch_angle=asin(temp_y);//pitch 
 	
+    //yaw
+    double temp_z=atan2((q.x*q.y+q.w*q.z),(double)0.5-(q.y*q.y+q.z*q.z));
+    if(fabs(temp_z-yaw_nav_prev)>3.141592){
+	if(temp_z>=0)		yaw_nav_count-=1;
+	else if(temp_z<0)	yaw_nav_count+=1;
+    }		
+    yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
+    yaw_nav_prev=temp_z;
 }
 
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
 	double e_y=yaw_d-yaw_angle;
-	
-	//if(e_y>3.141592) e_y-=6.283185;
-	//else if (e_y<-3.141592) e_y+=6.283185;
 
-	//previous imu code
-	//double tau_y_d=Py*e_y+Dy*(-imu_array[5]);
-	//double tau_Roll_input = tau_Roll.calculate(0, (imu_array[0]+10)*PI/180, imu_array[3]*PI/180,0.005);
-	//double tau_Pitch_input = tau_Pitch.calculate(0, imu_array[1]*PI/180, -imu_array[4]*PI/180,0.005);
-	
 	//realsense imu code
 	double tau_y_d=-Py*e_y+Dy*(-yaw_vel);
 	double tau_Roll_input = tau_Roll.calculate(0, -roll_angle, -roll_vel,0.005);
@@ -314,10 +301,10 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
 	//ROS_INFO("Roll :%lf, Pitch :%lf, ty:%lf, Thrust_d:%lf", tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
 
-	ud_to_PWM(tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);//tau_r_d,tau_p_d
+	tau_to_PWM(tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
 }
 
-void ud_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des){	
+void tau_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des){	
 	F1 = -(1.5625 * tau_r_des + 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
 	F2 = -(1.5625 * tau_r_des - 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
 	F3 = -(-1.5625 * tau_r_des - 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
