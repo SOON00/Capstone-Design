@@ -151,8 +151,8 @@ double Py=1;//1 : good
 double Dy=0;
 
 //Roll, Pitch controller
-dualPIDController tau_Roll(2,0,0,1,0,0);
-dualPIDController tau_Pitch(2,0,0.5,1,0,0);
+dualPIDController tau_Roll(4,0.02,0.5,1.1,0,0);// 6 0.02 0.5 1.1 0 0
+dualPIDController tau_Pitch(4,0,0.5,1.1,0,0);//2.5
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
