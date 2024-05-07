@@ -8,13 +8,10 @@
 
 #include <std_msgs/Int16MultiArray.h>
 #include <std_msgs/Float32MultiArray.h>
-#include <std_msgs/Float32.h>
 
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/Quaternion.h>
-#include <tf2_msgs/TFMessage.h>
-#include <tf/transform_listener.h>
 
 std_msgs::Int16MultiArray PWM_cmd;
 sensor_msgs::Imu imu_raw;
@@ -130,7 +127,6 @@ static double T_limit=100;//(N)           추력 제한
 static double yaw_limit=0;
 //--------------------------------------------------------
 
-
 //Function declaration====================================
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
 void tau_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des);
@@ -152,7 +148,7 @@ double Dy=0;
 
 //Roll, Pitch controller
 dualPIDController tau_Roll(4,0.02,0.5,1.1,0,0);// 6 0.02 0.5 1.1 0 0
-dualPIDController tau_Pitch(4,0,0.5,1.1,0,0);//2.5
+dualPIDController tau_Pitch(6.5,0.02,0.4,1,0,0);//
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
@@ -176,7 +172,7 @@ int main(int argc, char **argv){
 	ros::Subscriber imu_data=nh.subscribe("/imu_data", 100, &imu_Callback);
 	ros::Subscriber devo=nh.subscribe("/PPM", 100, &arrayCallback);
 
-	ros::Rate loop_rate(200);
+	ros::Rate loop_rate(300);
 
 	int flag_imu=0;//monitoring imu's availability
 
@@ -219,8 +215,8 @@ int main(int argc, char **argv){
 			T_d=T_limit*(((double)1500-thrust)/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
             //목표 추력
 
-			ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
-			ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
+			//ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
+			//ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
 			rpyT_ctrl(r_d, p_d, y_d, T_d);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
@@ -234,16 +230,6 @@ int main(int argc, char **argv){
 		 	PWM.publish(PWM_cmd);
 		 	break;             //Emergency break code
 		       }
-		       
-			/*if(arr[4] <= 100) { // Emergency Stop
-		 	PWM_cmd.data.resize(4);
-		 	PWM_cmd.data[0]=100;//각 모터에 대한 PWM값
-		 	PWM_cmd.data[1]=100;
-		 	PWM_cmd.data[2]=100;
-		 	PWM_cmd.data[3]=100;
-		 	PWM.publish(PWM_cmd);
-
-		}*/
 
 		PWM.publish(PWM_cmd);
 		ros::spinOnce();
@@ -319,7 +305,6 @@ void tau_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thr
 	PWM_cmd.data[1]=Force_to_PWM(F2,Thrust_des);
 	PWM_cmd.data[2]=Force_to_PWM(F3,Thrust_des);
 	PWM_cmd.data[3]=Force_to_PWM(F4,Thrust_des);
-	//ROS_INFO("1:%d, 2:%d, 3:%d, 4:%d",PWM_cmd.data[0], PWM_cmd.data[1], PWM_cmd.data[2], PWM_cmd.data[3]);
 }
 
 double constrain(double F){
