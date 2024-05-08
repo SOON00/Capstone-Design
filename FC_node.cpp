@@ -147,7 +147,7 @@ double Py=1;//1 : good
 double Dy=0;
 
 //Roll, Pitch controller
-dualPIDController tau_Roll(4,0.02,0.5,1.1,0,0);// 6 0.02 0.5 1.1 0 0
+dualPIDController tau_Roll(9,0.02,0.35,1.1,0,0);// 6 0.02 0.5 1.1 0 0
 dualPIDController tau_Pitch(6.5,0.02,0.4,1,0,0);//
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
@@ -166,11 +166,11 @@ int main(int argc, char **argv){
 	ros::NodeHandle nh;
 
 	//Publisher
-	ros::Publisher PWM=nh.advertise<std_msgs::Int16MultiArray>("PWM", 100);
+	ros::Publisher PWM=nh.advertise<std_msgs::Int16MultiArray>("PWM", 10);
 
 	//Subscriber
-	ros::Subscriber imu_data=nh.subscribe("/imu_data", 100, &imu_Callback);
-	ros::Subscriber devo=nh.subscribe("/PPM", 100, &arrayCallback);
+	ros::Subscriber imu_data=nh.subscribe("/imu_data", 10, &imu_Callback);
+	ros::Subscriber devo=nh.subscribe("/PPM", 10, &arrayCallback);
 
 	ros::Rate loop_rate(300);
 
