@@ -44,7 +44,14 @@ public:
         double angle_error = target - angle_input;
         
         double angle_P_term = angle_Kp*angle_error;
-        double target_rate = angle_P_term;
+        
+        angle_integral += angle_error*dt;
+        if(fabs(angle_integral)>i_limit)	angle_integral=(angle_integral/fabs(angle_integral))*i_limit;
+        double angle_I_term = angle_Ki * angle_integral;
+        
+        double angle_D_term = angle_Kd * rate_input;
+        
+        double target_rate = angle_P_term + angle_I_term + angle_D_term;
         
         double rate_error = target_rate - rate_input;
         
@@ -56,15 +63,9 @@ public:
         
         double rate_D_term = rate_Kd * (rate_error-prevError)/dt;
         
-        angle_integral += angle_error*dt;
-        if(fabs(angle_integral)>i_limit)	angle_integral=(angle_integral/fabs(angle_integral))*i_limit;
-        double angle_I_term = angle_Ki * angle_integral;
-        
-        double angle_D_term = angle_Kd * rate_input;
-        
         prevError = rate_error;
         
-        double controlOutput = rate_P_term + rate_I_term + rate_D_term + angle_I_term + angle_D_term;
+        double controlOutput = rate_P_term + rate_I_term + rate_D_term;
         
         return controlOutput; 
     }
@@ -147,8 +148,8 @@ double Py=1;//1 : good
 double Dy=0;
 
 //Roll, Pitch controller
-dualPIDController tau_Roll(9,0.02,0.35,1.1,0,0);// 6 0.02 0.5 1.1 0 0
-dualPIDController tau_Pitch(6.5,0.02,0.4,1,0,0);//
+dualPIDController tau_Roll(2,0,0,1,0,0);// 9 0.02 0.35 1.1 0 0
+dualPIDController tau_Pitch(6,0,0.35,1.1,0,0);// 6.5 0.02 0.4 1 0 0
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
