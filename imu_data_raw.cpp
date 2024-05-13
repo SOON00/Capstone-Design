@@ -26,67 +26,7 @@ array<double, 3> accel_data(const rs2_vector& accel) {
 
 // Madgwick filter parameters
 constexpr double beta = 0.15, zeta = 0.01;
-//double q0 = 1.0, q1 = 0.0, q2 = 0.0, q3 = 0.0; // quaternion elements representing the estimated orientation
-double invSampleFreq = 1.0 / 280.0; // inverse sample frequency
-
-/*
-void MadgwickAHRSupdateIMU(double ax, double ay, double az, double gx, double gy, double gz) {
-    double recipNorm;
-    double s0, s1, s2, s3;
-    double qDot1, qDot2, qDot3, qDot4;
-    double hx, hy;
-    double qDot1Half, qDot2Half, qDot3Half, qDot4Half;
-
-    // Rate of change of quaternion from gyroscope
-    qDot1 = 0.5 * (-q1 * gx - q2 * gy - q3 * gz);
-    qDot2 = 0.5 * (q0 * gx + q2 * gz - q3 * gy);
-    qDot3 = 0.5 * (q0 * gy - q1 * gz + q3 * gx);
-    qDot4 = 0.5 * (q0 * gz + q1 * gy - q2 * gx);
-
-    // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
-    if (!((ax == 0.0) && (ay == 0.0) && (az == 0.0))) {
-        // Normalise accelerometer measurement
-        recipNorm = 1.0 / sqrt(ax * ax + ay * ay + az * az);
-        ax *= recipNorm;
-        ay *= recipNorm;
-        az *= recipNorm;
-
-        // Estimated direction of gravity and magnetic field
-        hx = 2.0 * q0 * q2 + 2.0 * q1 * q3;
-        hy = 2.0 * q0 * q1 - 2.0 * q2 * q3;
-
-        // Rate of change of quaternion from gyroscope
-        qDot1Half = 0.5 * (-q1 * gx - q2 * gy - q3 * gz);
-        qDot2Half = 0.5 * (q0 * gx + q2 * gz - q3 * gy);
-        qDot3Half = 0.5 * (q0 * gy - q1 * gz + q3 * gx);
-        qDot4Half = 0.5 * (q0 * gz + q1 * gy - q2 * gx);
-
-        // Compute feedback
-        s0 = 2.0 * hx * (0.5 - q2 * q2 - q3 * q3) + 2.0 * hy * (q1 * q2 - q0 * q3);
-        s1 = 2.0 * hx * (q1 * q2 - q0 * q3) + 2.0 * hy * (q0 * q1 + q2 * q3);
-        s2 = 2.0 * hx * (q0 * q2 + q1 * q3) + 2.0 * hy * (0.5 - q1 * q1 - q3 * q3);
-        s3 = 2.0 * hx * (q1 * q3 - q0 * q2) + 2.0 * hy * (q2 * q3 - q0 * q1);
-
-        qDot1 -= beta * qDot1Half;
-        qDot2 -= beta * qDot2Half;
-        qDot3 -= beta * qDot3Half;
-        qDot4 -= beta * qDot4Half;
-
-        // Integrate rate of change of quaternion to yield quaternion
-        q0 += qDot1 * invSampleFreq;
-        q1 += qDot2 * invSampleFreq;
-        q2 += qDot3 * invSampleFreq;
-        q3 += qDot4 * invSampleFreq;
-
-        // Normalise quaternion
-        recipNorm = 1.0 / sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-        q0 *= recipNorm;
-        q1 *= recipNorm;
-        q2 *= recipNorm;
-        q3 *= recipNorm;
-    }
-}*/
-
+double invSampleFreq = 1.0 / 300.0; // inverse sample frequency
 double q10 = 1.0, q11 = 0.0, q12 = 0.0, q13 = 0.0;
 void MadgwickQuaternionUpdate(double ax, double ay, double az, double gyrox, double gyroy, double gyroz)
         {
@@ -191,7 +131,6 @@ void publish_imu_data(rs2::pipeline& camera_pipe) {
         rs2_vector gyro = gyro_frame.as<rs2::motion_frame>().get_motion_data();
 
         sensor_msgs::Imu imu_msg;
-        imu_msg.header.stamp = ros::Time::now();
         imu_msg.header.frame_id = "imu_link";
 
         auto accel_data_array = accel_data(accel);
@@ -215,7 +154,7 @@ void publish_imu_data(rs2::pipeline& camera_pipe) {
         imu_msg.angular_velocity.y = -gyro_data_array[0];
         imu_msg.angular_velocity.z = -gyro_data_array[1];
         
-        ROS_INFO("w:%lf, x:%lf, y:%lf z:%lf", q10, q11, q12, q13);
+        //ROS_INFO("w:%lf, x:%lf, y:%lf z:%lf", q10, q11, q12, q13);
 
         pub.publish(imu_msg);
         rate.sleep();
@@ -227,7 +166,51 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "d455_imu_publisher");
     rs2::pipeline camera_pipe;
     camera_pipe = initialize_camera();
-    publish_imu_data(camera_pipe);
+    //publish_imu_data(camera_pipe);
+        ros::NodeHandle nh;
+    ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu_data", 10);
+    ros::Rate rate(300);  // 400Hz
+
+    while (ros::ok()) {
+        rs2::frameset f = camera_pipe.wait_for_frames();
+        auto accel_frame = f.first_or_default(rs2_stream::RS2_STREAM_ACCEL);
+        auto gyro_frame = f.first_or_default(rs2_stream::RS2_STREAM_GYRO);
+
+        rs2_vector accel = accel_frame.as<rs2::motion_frame>().get_motion_data();
+        rs2_vector gyro = gyro_frame.as<rs2::motion_frame>().get_motion_data();
+
+        sensor_msgs::Imu imu_msg;
+        imu_msg.header.frame_id = "imu_link";
+
+        auto accel_data_array = accel_data(accel);
+        auto gyro_data_array = gyro_data(gyro);
+
+        // Call Madgwick filter to update quaternion
+        MadgwickQuaternionUpdate(accel_data_array[2], -accel_data_array[0], -accel_data_array[1],
+                              gyro_data_array[2],-gyro_data_array[0], -gyro_data_array[1]);
+
+        // Convert quaternion to orientation
+        imu_msg.orientation.w = q10;
+        imu_msg.orientation.x = q11;
+        imu_msg.orientation.y = q12;
+        imu_msg.orientation.z = q13;
+
+        imu_msg.linear_acceleration.x = accel_data_array[2];
+        imu_msg.linear_acceleration.y = -accel_data_array[0];
+        imu_msg.linear_acceleration.z = accel_data_array[1];
+
+        imu_msg.angular_velocity.x = gyro_data_array[2];
+        imu_msg.angular_velocity.y = -gyro_data_array[0];
+        imu_msg.angular_velocity.z = -gyro_data_array[1];
+        
+        //ROS_INFO("w:%lf, x:%lf, y:%lf z:%lf", q10, q11, q12, q13);
+
+        pub.publish(imu_msg);
+        rate.sleep();
+        ros::spinOnce();
+    }
     return 0;
 }
+
+
 
