@@ -120,7 +120,7 @@ double T_d=0;//desired thrust                 목표 스러스트
 
 //General parameters======================================
 
-static double rp_limit=0.2;//(rad)       롤피치 각도제한 
+static double rp_limit=0.5;//(rad)       롤피치 각도제한 
 static double y_vel_limit=0.01;//(rad/s) 요 각속도 제한
 static double y_d_tangent_deadzone=(double)0.05*y_vel_limit;//(rad/s)
 //작은 오차에 의한 드론의 움직임 방지
@@ -148,8 +148,8 @@ double Py=1;//1 : good
 double Dy=0;
 
 //Roll, Pitch controller
-dualPIDController tau_Roll(2,0,0,1,0,0);// 9 0.02 0.35 1.1 0 0
-dualPIDController tau_Pitch(6,0,0.35,1.1,0,0);// 6.5 0.02 0.4 1 0 0
+dualPIDController tau_Roll(5,0.01,0.3,1.1,0,0);// 9 0.02 0.35 1.1 0 0
+dualPIDController tau_Pitch(5,0.01,0.3,1,0,0);// 6 0 0.35 1.1 0 0
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
@@ -195,7 +195,7 @@ int main(int argc, char **argv){
 				flag_imu=1;
 			}
 			
-			r_d=rp_limit*((arr[4]-(double)1500)/(double)500);
+			r_d=-rp_limit*((arr[4]-(double)1500)/(double)500);
             //목표 롤 각도 최대값 곱하기 -1or1 (수신기 신호를 -1~1로 맵핑)
 			p_d=rp_limit*(-(arr[2]-(double)1500)/(double)500);
             //목표 피치
@@ -283,7 +283,7 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 
 	//realsense imu code
 	double tau_y_d=-Py*e_y+Dy*(-yaw_vel);
-	double tau_Roll_input = tau_Roll.calculate(0, -roll_angle, -roll_vel,0.005);
+	double tau_Roll_input = tau_Roll.calculate(roll_d, -roll_angle, -roll_vel,0.005);
 	double tau_Pitch_input = tau_Pitch.calculate(0, pitch_angle, pitch_vel,0.005);
 
 	//ROS_INFO("Roll :%lf, Pitch :%lf, ty:%lf, Thrust_d:%lf", tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
