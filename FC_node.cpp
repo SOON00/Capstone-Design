@@ -121,7 +121,7 @@ double T_d=0;//desired thrust                 목표 스러스트
 //General parameters======================================
 
 static double rp_limit=0.5;//(rad)       롤피치 각도제한 
-static double y_vel_limit=0.01;//(rad/s) 요 각속도 제한
+static double y_vel_limit=0.0003;//(rad/s) 요 각속도 제한
 static double y_d_tangent_deadzone=(double)0.05*y_vel_limit;//(rad/s)
 //작은 오차에 의한 드론의 움직임 방지
 static double T_limit=100;//(N)           추력 제한
@@ -134,6 +134,7 @@ void tau_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thr
 double Force_to_PWM(double F, double Thrust);
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d);
 void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data);
+void poseCmdCallback(const geometry_msgs::Vector3::ConstPtr& msg);
 double constrain(double F);
 //--------------------------------------------------------
 int thrust = 0;
@@ -144,12 +145,12 @@ int thrust = 0;
 double integ_limit=2;
 
 //Yaw PID gains
-double Py=1;//1 : good
+double Py=45;//1 : good
 double Dy=0;
 
 //Roll, Pitch controller
-dualPIDController tau_Roll(5,0.01,0.3,1.1,0,0);// 9 0.02 0.35 1.1 0 0
-dualPIDController tau_Pitch(5,0.01,0.3,1,0,0);// 6 0 0.35 1.1 0 0
+dualPIDController tau_Roll(7,0.03,0.3,1.4,0,0);// 9 0.02 0.35 1.1 0 0
+dualPIDController tau_Pitch(7,0.03,0.3,1.4,0,0);// 6 0 0.35 1.1 0 0
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
@@ -159,6 +160,10 @@ double yaw_angle=0;
 double roll_vel=0;
 double pitch_vel=0;
 double yaw_vel=0;
+
+float pose_r_d=0;
+float pose_p_d=0;
+float pose_T_d=0;
 
 //Main====================================================
 
@@ -172,6 +177,7 @@ int main(int argc, char **argv){
 	//Subscriber
 	ros::Subscriber imu_data=nh.subscribe("/imu_data", 10, &imu_Callback);
 	ros::Subscriber devo=nh.subscribe("/PPM", 10, &arrayCallback);
+	ros::Subscriber pose_cmd = nh.subscribe("/pose_cmd", 10, poseCmdCallback);
 
 	ros::Rate loop_rate(300);
 
@@ -218,7 +224,7 @@ int main(int argc, char **argv){
 
 			//ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
 			//ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
-			rpyT_ctrl(r_d, p_d, y_d, T_d);
+			rpyT_ctrl(r_d+pose_r_d, p_d+pose_p_d, y_d, T_d);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
@@ -242,6 +248,12 @@ int main(int argc, char **argv){
 //--------------------------------------------------------
 
 //Functions===============================================
+
+void poseCmdCallback(const geometry_msgs::Vector3::ConstPtr& msg){
+    pose_r_d=msg->x;
+    pose_p_d=msg->y;
+    pose_T_d=msg->z;
+}
 
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
 	for(int i=0;i<7;i++){
@@ -284,7 +296,7 @@ void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
 	//realsense imu code
 	double tau_y_d=-Py*e_y+Dy*(-yaw_vel);
 	double tau_Roll_input = tau_Roll.calculate(roll_d, -roll_angle, -roll_vel,0.005);
-	double tau_Pitch_input = tau_Pitch.calculate(0, pitch_angle, pitch_vel,0.005);
+	double tau_Pitch_input = tau_Pitch.calculate(pitch_d, pitch_angle, pitch_vel,0.005);
 
 	//ROS_INFO("Roll :%lf, Pitch :%lf, ty:%lf, Thrust_d:%lf", tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
 
