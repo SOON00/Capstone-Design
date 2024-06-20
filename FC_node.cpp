@@ -8,6 +8,7 @@
 
 #include <std_msgs/Int16MultiArray.h>
 #include <std_msgs/Float32MultiArray.h>
+#include <std_msgs/Float32.h>
 
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Vector3.h>
@@ -135,6 +136,7 @@ double Force_to_PWM(double F, double Thrust);
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d);
 void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data);
 void poseCmdCallback(const geometry_msgs::Vector3::ConstPtr& msg);
+void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg);
 double constrain(double F);
 //--------------------------------------------------------
 int thrust = 0;
@@ -145,12 +147,12 @@ int thrust = 0;
 double integ_limit=2;
 
 //Yaw PID gains
-double Py=45;//1 : good
+double Py=45;//45
 double Dy=0;
 
 //Roll, Pitch controller
-dualPIDController tau_Roll(7,0.03,0.3,1.4,0,0);// 9 0.02 0.35 1.1 0 0
-dualPIDController tau_Pitch(7,0.03,0.3,1.4,0,0);// 6 0 0.35 1.1 0 0
+dualPIDController tau_Roll(7,0.03,0.3,1.4,0,0);// 7 0.03 0.3 1.4 0 0
+dualPIDController tau_Pitch(7,0.03,0.3,1.4,0,0);// 7 0.03 0.3 1.4 0 0
 PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
@@ -165,6 +167,8 @@ float pose_r_d=0;
 float pose_p_d=0;
 float pose_T_d=0;
 
+float t265_yaw=0;
+
 //Main====================================================
 
 int main(int argc, char **argv){
@@ -178,6 +182,7 @@ int main(int argc, char **argv){
 	ros::Subscriber imu_data=nh.subscribe("/imu_data", 10, &imu_Callback);
 	ros::Subscriber devo=nh.subscribe("/PPM", 10, &arrayCallback);
 	ros::Subscriber pose_cmd = nh.subscribe("/pose_cmd", 10, poseCmdCallback);
+	ros::Subscriber yaw_cmd = nh.subscribe("/yaw_cmd", 10, yawCmdCallback);
 
 	ros::Rate loop_rate(300);
 
@@ -224,7 +229,9 @@ int main(int argc, char **argv){
 
 			//ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", r_d, p_d, y_d, T_d);
 			//ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
-			rpyT_ctrl(r_d+pose_r_d, p_d+pose_p_d, y_d, T_d);
+			//rpyT_ctrl(r_d+pose_r_d, p_d+pose_p_d, y_d, T_d);
+			rpyT_ctrl(r_d, p_d, y_d, T_d);
+			//rpyT_ctrl(pose_r_d, pose_p_d, 0, T_d);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
 		}
@@ -248,6 +255,18 @@ int main(int argc, char **argv){
 //--------------------------------------------------------
 
 //Functions===============================================
+double yaw_nav_prev=0;
+int yaw_nav_count=0;
+void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg){
+    t265_yaw=msg->data;
+    double temp_z=t265_yaw;
+    if(fabs(temp_z-yaw_nav_prev)>3.141592){
+	if(temp_z>=0)		yaw_nav_count-=1;
+	else if(temp_z<0)	yaw_nav_count+=1;
+    }		
+    yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
+    yaw_nav_prev=temp_z;
+}
 
 void poseCmdCallback(const geometry_msgs::Vector3::ConstPtr& msg){
     pose_r_d=msg->x;
@@ -262,8 +281,6 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
 	return;
 }
 
-double yaw_nav_prev=0;
-int yaw_nav_count=0;
 void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
     RPY_ang_vel = imu_data->angular_velocity;
     roll_vel=RPY_ang_vel.x;
@@ -279,6 +296,7 @@ void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
     //if(fabs(temp_y)>0.9999) temp_y=(temp_y/fabs(temp_y))*0.9999;
     pitch_angle=asin(temp_y);//pitch 
 	
+    /*
     //yaw
     double temp_z=atan2((q.x*q.y+q.w*q.z),(double)0.5-(q.y*q.y+q.z*q.z));
     if(fabs(temp_z-yaw_nav_prev)>3.141592){
@@ -286,7 +304,7 @@ void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
 	else if(temp_z<0)	yaw_nav_count+=1;
     }		
     yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
-    yaw_nav_prev=temp_z;
+    yaw_nav_prev=temp_z;*/
 }
 
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){

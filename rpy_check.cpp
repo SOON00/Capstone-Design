@@ -9,6 +9,7 @@
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/Quaternion.h>
+#include <std_msgs/Float32.h>
 
 sensor_msgs::Imu imu_data;
 
@@ -21,11 +22,12 @@ double yaw_angle=0;
 double roll_vel=0;
 double pitch_vel=0;
 double yaw_vel=0;
-double yaw_nav_prev=0;
-int yaw_nav_count=0;
+
+float t265_yaw=0;
 
 //Function declaration====================================
 void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data);
+void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg);
 
 //Main====================================================
 
@@ -34,9 +36,10 @@ int main(int argc, char **argv){
 	ros::NodeHandle nh;
 
 	//Subscriber
-	ros::Subscriber imu_data=nh.subscribe("/imu_data", 100, &imu_Callback);
+	ros::Subscriber imu_data=nh.subscribe("/imu_data", 10, &imu_Callback);
+	ros::Subscriber yaw_cmd = nh.subscribe("/yaw_cmd", 10, yawCmdCallback);
 	
-	ros::Rate loop_rate(300);
+	ros::Rate loop_rate(1);
 
 	int flag_imu=0;//monitoring imu's availability
 
@@ -51,6 +54,18 @@ int main(int argc, char **argv){
 //--------------------------------------------------------
 
 //Functions===============================================
+double yaw_nav_prev=0;
+int yaw_nav_count=0;
+void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg){
+    t265_yaw=msg->data;
+    double temp_z=t265_yaw;
+    if(fabs(temp_z-yaw_nav_prev)>3.141592){
+	if(temp_z>=0)		yaw_nav_count-=1;
+	else if(temp_z<0)	yaw_nav_count+=1;
+    }		
+    yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
+    yaw_nav_prev=temp_z;
+}
 
 void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
     RPY_ang_vel = imu_data->angular_velocity;
@@ -67,6 +82,7 @@ void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
     //if(fabs(temp_y)>0.9999) temp_y=(temp_y/fabs(temp_y))*0.9999;
     pitch_angle=asin(temp_y);//pitch 
 	
+    /*
     //yaw
     double temp_z=atan2((q.x*q.y+q.w*q.z),(double)0.5-(q.y*q.y+q.z*q.z));
     if(fabs(temp_z-yaw_nav_prev)>3.141592){
@@ -74,6 +90,6 @@ void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
 	else if(temp_z<0)	yaw_nav_count+=1;
     }		
     yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
-    yaw_nav_prev=temp_z;
+    yaw_nav_prev=temp_z;*/
 }
 
