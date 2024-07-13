@@ -234,10 +234,10 @@ int main(int argc, char **argv){
 			T_d=T_limit*(((double)1500-thrust)/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
                        //목표 추력
 
-			//ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", desired_roll, p_d, y_d, T_d);
+			//ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", desired_roll, desired_pitch, y_d, T_d);
 			//ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
-			//rpyT_ctrl(desired_roll+pose_r_d, p_d+pose_p_d, y_d, T_d);
-			//rpyT_ctrl(desired_roll, p_d, y_d, T_d);
+			//rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, y_d, T_d);
+			//rpyT_ctrl(desired_roll, desired_pitch, y_d, T_d);
 			rpyT_ctrl(pose_r_d, pose_p_d, 0, T_d);
             //목표 각도와 추력을 이용해 PWM 계산하는 함수	
 			
