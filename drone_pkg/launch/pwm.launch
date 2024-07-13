@@ -1,0 +1,8 @@
+<launch>
+
+    <!-- PWM -->
+    <node name="FC_node" pkg="drone_pkg" type="FC_node" output="screen" />
+    <node name="bldc_process" pkg="drone_pkg" type="bldc_process" output="screen" />
+    
+</launch>
+

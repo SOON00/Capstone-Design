@@ -1,0 +1,11 @@
+<launch>
+  <!-- RealSense node -->
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+  </include>
+
+  <!-- AprilTag node -->
+  <include file="$(find apriltag_ros)/launch/continuous_detection.launch">
+    <param name="image_topic" type="string" value="/camera/color/image_raw"/>
+  </include>
+</launch>
+

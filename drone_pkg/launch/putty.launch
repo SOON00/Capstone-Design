@@ -1,0 +1,13 @@
+<launch>
+    <!-- TF -->
+    <node name="tf_setting" pkg="drone_pkg" type="tf_setting" output="screen" />
+    <node name="new_origin" pkg="drone_pkg" type="new_origin" output="screen" />
+
+    <!-- PPM -->
+    <node name="arduino_ppm" pkg="drone_pkg" type="arduino_ppm.py" output="screen" />
+    
+    <!-- imu -->
+    <node name="imu_data" pkg="drone_pkg" type="imu_data" output="screen" />
+
+</launch>
+

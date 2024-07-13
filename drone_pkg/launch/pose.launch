@@ -1,0 +1,10 @@
+<launch>
+
+    <!-- rs_t265.launch -->
+    <include file="$(find realsense2_camera)/launch/rs_t265.launch" />
+
+    <!-- pose_ctrl -->
+    <node name="pose_ctrl" pkg="drone_pkg" type="pose_ctrl" output="screen" />
+    
+</launch>
+
