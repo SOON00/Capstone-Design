@@ -56,8 +56,8 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
 
 PIDController desired_X(0.05,0,0.005);
 
-PIDController desired_X_v(1,0,0);
-float kp_l_v = 1;
+//PIDController desired_X_v(1,0,0);
+//float kp_l_v = 1;
 
 PIDController desired_Y(0,0,0);
 PIDController desired_Z(2,0,1);
@@ -112,14 +112,14 @@ int main(int argc, char** argv) {
             float posX_rot = -(posX * cos(yaw) - posY * sin(yaw));
             float posY_rot = -(posX * sin(yaw) + posY * cos(yaw));
             
-            //pose_cmd.x = desired_X.calculate(posY_d, posY_rot, 0.005,linear_velocity_y);
+            pose_cmd.x = desired_X.calculate(posY_d, posY_rot, 0.005,linear_velocity_y);
             
-            double target_l_v = kp_l_v * (posY_d-posY_rot);
+            //double target_l_v = kp_l_v * (posY_d-posY_rot);
             
-            if (target_l_v > l_v_limit) target_l_v = l_v_limit;
-            else if (target_l_v < -l_v_limit) target_l_v = -l_v_limit;
+            //if (target_l_v > l_v_limit) target_l_v = l_v_limit;
+            //else if (target_l_v < -l_v_limit) target_l_v = -l_v_limit;
             
-            pose_cmd.x = desired_X_v.calculate(0, -linear_velocity_y, 0.005,0);//target_l_v
+            //pose_cmd.x = desired_X_v.calculate(0, -linear_velocity_y, 0.005,0);//target_l_v
             
             pose_cmd.y = desired_Y.calculate(posX_d, posX_rot, 0.005,linear_velocity_x);
             pose_cmd.z = desired_Z.calculate(posZ_d, posZ, 0.005,0);
