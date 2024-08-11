@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 
-const uint16_t PRESCALE = 15; //hz
+const uint16_t PRESCALE = 29; //hz
 
 class PCA9685 {
 public:

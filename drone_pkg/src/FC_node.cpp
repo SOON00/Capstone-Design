@@ -14,16 +14,6 @@
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/Quaternion.h>
 
-double angle_p_roll=4.5;
-double angle_i_roll=0;
-double angle_d_roll=0.15;
-double rate_p_roll=2.5;//3
-
-double angle_p_pitch=4;
-double angle_i_pitch=0;
-double angle_d_pitch=0.2;
-double rate_p_pitch=1;
-
 std_msgs::Int16MultiArray PWM_cmd;
 sensor_msgs::Imu imu_raw;
 sensor_msgs::Imu imu_data;
@@ -48,9 +38,11 @@ private:
     double rate_integral;
     
     double i_limit;
+    
+    double prev_rate_D_term;
 public:
     dualPIDController(double angle_p, double angle_i, double angle_d, double rate_p, double rate_i, double rate_d) :
-    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(2) {}
+    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(2),prev_rate_D_term(0) {}
     double calculate(double target, double angle_input, double rate_input, double dt){
         double angle_error = target - angle_input;
         
@@ -72,7 +64,11 @@ public:
         if(fabs(rate_integral)>i_limit)	rate_integral=(rate_integral/fabs(rate_integral))*i_limit;
         double rate_I_term = rate_Ki * rate_integral;
         
-        double rate_D_term = rate_Kd * (rate_error-prevError)/dt;
+        double rate_D_term = (rate_error-prevError)/dt;
+        
+        rate_D_term = rate_Kd * (0.95 * prev_rate_D_term + 0.05 * rate_D_term);
+        
+        prev_rate_D_term = rate_D_term;
         
         prevError = rate_error;
         
@@ -89,15 +85,17 @@ private:
     double Kd;
 
     double integral;
+    double i_limit;
 public:
     PIDController(double p, double i, double d) :
-    Kp(p), Ki(i), Kd(d), integral(0) {}
+    Kp(p), Ki(i), Kd(d), integral(0), i_limit(2) {}
     double calculate(double target, double input, double rate_input, double dt){
         double error = target - input;
         
         double P_term = Kp*error;
         
         integral += error*dt;
+        if(fabs(integral)>i_limit) integral=(integral/fabs(integral))*i_limit;
         double I_term = Ki * integral;
         
         double D_term = Kd * rate_input;
@@ -108,34 +106,26 @@ public:
     }
 };//PID control class
 
-int RC_arr[7];//0:roll, 1:pitch, 2:yaw, 3:thrust, 4:3-step switch 
+//---------------------------------------------------------------
+int RC_arr[7];//0:roll, 1:pitch, 2:yaw, 3:thrust, 4:3-step switch
 
-//Commands================================================
-
-//Thruster_cmd
 double F1=0;//desired propeller 1 force
 double F2=0;//desired propeller 2 force
 double F3=0;//desired propeller 3 force
 double F4=0;//desired propeller 4 force
 
-//ud_cmd
-double desired_roll = 0;//desired roll angle             목표 롤값
-double desired_pitch = 0;//desired pitch angle            목표 피치값
-double y_d = 0;//desired yaw angle              목표 요값
-double y_d_tangent=0;//yaw increment tangent  각속도 목표값
-double T_d=0;//desired thrust                 목표 스러스트
+double desired_roll = 0;//desired roll angle            목표 롤값
+double desired_pitch = 0;//desired pitch angle          목표 피치값
+double desired_yaw = 0;//desired yaw angle              목표 요값
+double desired_yaw_vel = 0;//yaw increment tangent      각속도 목표값
+double desired_thrust = 0;//desired thrust              목표 스러스트
 
 //--------------------------------------------------------
+static double rp_limit=0.2;//(rad)       롤피치 각도제한 
+static double yaw_vel_limit=0.0003;//(rad/s) 요 각속도 제한
 
-//General parameters======================================
-
-static double rp_limit=0.5;//(rad)       롤피치 각도제한 
-static double y_vel_limit=0.0003;//(rad/s) 요 각속도 제한
-static double y_d_tangent_deadzone=(double)0.05*y_vel_limit;//(rad/s)
-//작은 오차에 의한 드론의 움직임 방지
-static double T_limit=100;//(N)           추력 제한
+static double T_limit=100;//(N)추력 제한
 static double yaw_limit=0;
-//--------------------------------------------------------
 
 //Function declaration====================================
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
@@ -149,19 +139,12 @@ double constrain(double F);
 //--------------------------------------------------------
 int thrust = 0;
 
-//Control gains===========================================
+double integ_limit=0.5;
 
-//integratior(PID) limitation
-double integ_limit=2;
+dualPIDController tau_Yaw(100,0,0,3,0,0);//100 3
+dualPIDController tau_Roll(5,0,0,1.5,0.5,0);// 5 1.5 0.5
+dualPIDController tau_Pitch(4,0,0,1.5,1.3,0);// 4 1.5 1.3
 
-//Yaw PID gains
-double Py=0;//45 150
-double Dy=0;
-
-//Roll, Pitch controller P,I,D gain
-PIDController tau_Roll(angle_p_roll,angle_i_roll,angle_d_roll);// 7 0.03 0.3 1.4 0 0
-PIDController tau_Pitch(angle_p_pitch,angle_i_pitch,angle_d_pitch);// 7 0.03 0.3 1.4 0 0
-PIDController tau_yaw(1,0,0);
 //--------------------------------------------------------
 
 double roll_angle=0;
@@ -177,101 +160,87 @@ float pose_T_d=0;
 
 float t265_yaw=0;
 
-//Main====================================================
-
 int main(int argc, char **argv){
-	ros::init(argc, argv, "FC_node");
-	ros::NodeHandle nh;
+    ros::init(argc, argv, "FC_node");
+    ros::NodeHandle nh;
 
-	//Publisher
-	ros::Publisher PWM=nh.advertise<std_msgs::Int16MultiArray>("PWM", 10);
+    //Publisher
+    ros::Publisher PWM=nh.advertise<std_msgs::Int16MultiArray>("PWM", 10);
 
-	//Subscriber
-	ros::Subscriber imu_data=nh.subscribe("/imu_data", 10, &imu_Callback);
-	ros::Subscriber devo=nh.subscribe("/PPM", 10, &arrayCallback);
-	ros::Subscriber pose_cmd = nh.subscribe("/pose_cmd", 10, poseCmdCallback);
-	ros::Subscriber yaw_cmd = nh.subscribe("/yaw_cmd", 10, yawCmdCallback);
+    //Subscriber
+    ros::Subscriber imu_data=nh.subscribe("/imu_data", 10, &imu_Callback);
+    ros::Subscriber devo=nh.subscribe("/PPM", 10, &arrayCallback);
+    ros::Subscriber pose_cmd = nh.subscribe("/pose_cmd", 10, poseCmdCallback);
+    ros::Subscriber yaw_cmd = nh.subscribe("/yaw_cmd", 10, yawCmdCallback);
 
-	ros::Rate loop_rate(300);
+    ros::Rate loop_rate(200);
 
-	int flag_imu=0;//monitoring imu's availability
+    int flag_imu=0;//monitoring imu's availability
 
-	while(ros::ok()){
-		if(RC_arr[5]>1500){ // Emergency Stop
-		 	flag_imu=0;
+    while(ros::ok()){
+        if(RC_arr[5]>1500){ // Emergency Stop
+            flag_imu=0;
 
-		 	PWM_cmd.data.resize(4);
-		 	PWM_cmd.data[0]=200;
-		 	PWM_cmd.data[1]=200;
-		 	PWM_cmd.data[2]=200;
-		 	PWM_cmd.data[3]=200;
-		}
+            PWM_cmd.data.resize(4);
+            PWM_cmd.data[0]=200;
+            PWM_cmd.data[1]=200;
+            PWM_cmd.data[2]=200;
+            PWM_cmd.data[3]=200;
+            }
 		
-		 else{//5번 스위치 작동
-			//Initialize desired yaw
-			if(flag_imu!=1){
-				y_d=yaw_angle;//initial desired yaw setting
-				flag_imu=1;
-			}
-			
-			desired_roll = -rp_limit*((RC_arr[4]-(double)1500)/(double)500);
-			desired_pitch=rp_limit*(-(RC_arr[2]-(double)1500)/(double)500);
+        else{//5번 스위치 작동
+	    if(flag_imu!=1){
+	        desired_yaw=yaw_angle;//initial desired yaw setting
+		flag_imu=1;
+	    }		
+	    desired_roll = -rp_limit*((RC_arr[4]-(double)1500)/(double)500);
+	    desired_pitch = rp_limit*(-(RC_arr[2]-(double)1500)/(double)500);
                        
-			if(fabs(RC_arr[1]>1450 && RC_arr[1]<1550)) {yaw_limit = 1500;}
-			else {yaw_limit = RC_arr[1];}
-			y_d_tangent=y_vel_limit*((yaw_limit-(double)1500)/(double)500);
-                       //목표 요 각속도
-            
-			//if(fabs(y_d_tangent)<y_d_tangent_deadzone || fabs(y_d_tangent)>y_vel_limit) y_d_tangent=0;
-                       //데드존안에 있지 않거나 제한값을 초과할 때 요 각속도 0으로 하여 안정화
-            
-			y_d-=y_d_tangent;
-			if(y_d>180) y_d-=360;
-			else if (y_d<-180) y_d+=360; 
-                       //요 각속도를 더하여 목표 요 각도를 만들기
-            
-			thrust = RC_arr[3];
-			T_d=T_limit*(((double)1500-thrust)/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
-                       //목표 추력
+	    if(fabs(RC_arr[1]>1450 && RC_arr[1]<1550)) {yaw_limit = 1500;}
+	    else {yaw_limit = RC_arr[1];}
+	    
+	    desired_yaw_vel = yaw_vel_limit*((yaw_limit-(double)1500)/(double)500);
+	    desired_yaw -= desired_yaw_vel;
+	    //ROS_INFO("r:%lf", yaw_angle);
+	                 
+	    thrust = RC_arr[3];
+            desired_thrust = T_limit*(((double)1500-thrust)/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
+            //ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", desired_roll, desired_pitch, y_d, desired_thrust);
+            //ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
+             
+            rpyT_ctrl(desired_roll, desired_pitch, desired_yaw, desired_thrust); //only attitude
+            //rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust); //attitude+position
+            //rpyT_ctrl(pose_r_d, pose_p_d, yaw_angle, desired_thrust); //only position
+        }
+        
+        if(fabs(roll_angle)>1 || fabs(pitch_angle)>1) { // Emergency Stop
+            PWM_cmd.data.resize(4);
+            PWM_cmd.data[0]=200;
+            PWM_cmd.data[1]=200;
+            PWM_cmd.data[2]=200;
+            PWM_cmd.data[3]=200;
+            PWM.publish(PWM_cmd);
+            break;
+        }
 
-			//ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", desired_roll, desired_pitch, y_d, T_d);
-			//ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
-			//rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, y_d, T_d);
-			rpyT_ctrl(desired_roll, desired_pitch, y_d, T_d);
-			//rpyT_ctrl(pose_r_d, pose_p_d, 0, T_d);
-            //목표 각도와 추력을 이용해 PWM 계산하는 함수	
-			
-		}
-			if(fabs(roll_angle)>1 || fabs(pitch_angle)>1) { // Emergency Stop
-		 	PWM_cmd.data.resize(4);
-		 	PWM_cmd.data[0]=200;
-		 	PWM_cmd.data[1]=200;
-		 	PWM_cmd.data[2]=200;
-		 	PWM_cmd.data[3]=200;
-		 	PWM.publish(PWM_cmd);
-		 	break;             //Emergency break code
-		       }
-
-		PWM.publish(PWM_cmd);
-		ros::spinOnce();
-		loop_rate.sleep();	
-
-	}
-	return 0;
+	PWM.publish(PWM_cmd);
+	ros::spinOnce();
+	loop_rate.sleep();	
+    }
+    return 0;
 }
-//--------------------------------------------------------
 
-//Functions===============================================
 double yaw_nav_prev=0;
 int yaw_nav_count=0;
+
 void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg){
     t265_yaw=msg->data;
     double temp_z=t265_yaw;
-    if(fabs(temp_z-yaw_nav_prev)>3.141592){
+    if(fabs(temp_z-yaw_nav_prev) > PI){
 	if(temp_z>=0)		yaw_nav_count-=1;
 	else if(temp_z<0)	yaw_nav_count+=1;
     }		
-    yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
+    yaw_angle=temp_z+(double)2*PI*(double)yaw_nav_count;//yaw
     yaw_nav_prev=temp_z;
 }
 
@@ -282,10 +251,10 @@ void poseCmdCallback(const geometry_msgs::Vector3::ConstPtr& msg){
 }
 
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
-	for(int i=0;i<7;i++){
-		RC_arr[i]=array->data[i];
-	}
-	return;
+    for(int i=0;i<7;i++){
+	RC_arr[i]=array->data[i];
+    }
+    return;
 }
 
 void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
@@ -293,56 +262,39 @@ void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
     roll_vel=RPY_ang_vel.x;
     pitch_vel=RPY_ang_vel.y;
     yaw_vel=RPY_ang_vel.z;
+    
     q = imu_data->orientation;
     
-    //roll
-    roll_angle=atan2((q.y*q.z+q.w*q.x),(double)0.5-(q.x*q.x+q.y*q.y));//roll
-    
-    //pitch        
+    roll_angle=atan2((q.y*q.z+q.w*q.x),(double)0.5-(q.x*q.x+q.y*q.y));//roll     
     double temp_y=(-(double)2*(q.x*q.z-q.w*q.y));
     //if(fabs(temp_y)>0.9999) temp_y=(temp_y/fabs(temp_y))*0.9999;
     pitch_angle=asin(temp_y);//pitch 
-	
-    /*
-    //yaw
-    double temp_z=atan2((q.x*q.y+q.w*q.z),(double)0.5-(q.y*q.y+q.z*q.z));
-    if(fabs(temp_z-yaw_nav_prev)>3.141592){
-	if(temp_z>=0)		yaw_nav_count-=1;
-	else if(temp_z<0)	yaw_nav_count+=1;
-    }		
-    yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
-    yaw_nav_prev=temp_z;*/
 }
 
-void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){
-
-	double e_y=yaw_d-yaw_angle;
-
-	//realsense imu code
-	double tau_y_d=-Py*e_y+Dy*(-yaw_vel);
-	double tau_Roll_input = tau_Roll.calculate(roll_d, -roll_angle, -roll_vel,0.005);
-	double tau_Pitch_input = tau_Pitch.calculate(pitch_d, pitch_angle, pitch_vel,0.005);
-
-	//ROS_INFO("Roll :%lf, Pitch :%lf, ty:%lf, Thrust_d:%lf", tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
-
-	tau_to_PWM(tau_Roll_input, tau_Pitch_input, tau_y_d, Thrust_d);
+void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){	
+    double tau_Roll_input = tau_Roll.calculate(roll_d, -roll_angle, -roll_vel, 0.005);
+    double tau_Pitch_input = tau_Pitch.calculate(pitch_d, pitch_angle, pitch_vel, 0.005);
+    double tau_Yaw_input = tau_Yaw.calculate(-yaw_d, -yaw_angle, -yaw_vel, 0.005);//yaw_d, yaw_angle, yaw_vel,0.005
+    //ROS_INFO("Roll :%lf, yaw_vel :%lf, Yaw:%lf, yaw_angle:%lf", tau_Roll_input, yaw_vel, tau_Yaw_input, yaw_angle);
+    tau_to_PWM(tau_Roll_input, tau_Pitch_input, tau_Yaw_input, Thrust_d);
 }
 
 void tau_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des){	
-	F1 = -(1.5625 * tau_r_des + 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
-	F2 = -(1.5625 * tau_r_des - 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
-	F3 = -(-1.5625 * tau_r_des - 1.5625 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
-	F4 = -(-1.5625 * tau_r_des + 1.5625 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
-	F1= constrain(F1);
-	F2= constrain(F2);
-	F3= constrain(F3);
-	F4= constrain(F4);
-	//ROS_INFO("F1:%lf, F2:%lf, F3:%lf, F4:%lf", F1, F2, F3, F4);
-	PWM_cmd.data.resize(4);
-	PWM_cmd.data[0]=Force_to_PWM(F1,Thrust_des);
-	PWM_cmd.data[1]=Force_to_PWM(F2,Thrust_des);
-	PWM_cmd.data[2]=Force_to_PWM(F3,Thrust_des);
-	PWM_cmd.data[3]=Force_to_PWM(F4,Thrust_des);
+    F1 = -(1.5375 * tau_r_des + 1.5375 * tau_p_des - 0.25 * tau_y_des - 0.2315 * Thrust_des);
+    F2 = -(1.5375 * tau_r_des - 1.5375 * tau_p_des + 0.25 * tau_y_des - 0.2685 * Thrust_des);
+    F3 = -(-1.5375 * tau_r_des - 1.5375 * tau_p_des - 0.25 * tau_y_des - 0.2685 * Thrust_des);
+    F4 = -(-1.5375 * tau_r_des + 1.5375 * tau_p_des + 0.25 * tau_y_des - 0.2315 * Thrust_des);
+    //ROS_INFO("F1:%lf, F2:%lf, F3:%lf, F4:%lf", F1, F2, F3, F4);
+    F1= constrain(F1);
+    F2= constrain(F2);
+    F3= constrain(F3);
+    F4= constrain(F4);
+    //ROS_INFO("F1:%lf, F2:%lf, F3:%lf, F4:%lf", F1, F2, F3, F4);
+    PWM_cmd.data.resize(4);
+    PWM_cmd.data[0]=Force_to_PWM(F1,Thrust_des);
+    PWM_cmd.data[1]=Force_to_PWM(F2,Thrust_des);
+    PWM_cmd.data[2]=Force_to_PWM(F3,Thrust_des);
+    PWM_cmd.data[3]=Force_to_PWM(F4,Thrust_des);
 }
 
 double constrain(double F){
@@ -352,10 +304,8 @@ double constrain(double F){
 }
 
 double Force_to_PWM(double F, double Thrust){
-
-	double pwm=2*(sqrt((32*F+243.1144)/0.0012)-343.9167);
-	if(pwm<=200)	{pwm=200;}
-	if(pwm>=1800)	{pwm=1800;}
-
-	return pwm;
+    double pwm=2*(sqrt((32*F+243.1144)/0.0012)-343.9167);
+    if(pwm<=200) {pwm=200;}
+    if(pwm>=1800) {pwm=1800;}
+    return pwm;
 }

@@ -10,7 +10,7 @@ from collections import deque
 ser = serial.Serial('/dev/ttyUSB0', 9600)
 
 # 버퍼 크기 설정
-BUFFER_SIZE = 3
+BUFFER_SIZE = 5
 
 # 각 센서에 대한 버퍼 생성
 buffers = {

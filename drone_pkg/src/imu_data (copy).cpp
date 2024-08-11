@@ -4,16 +4,16 @@
 #include <librealsense2/rs.hpp>
 #include <array>
 #include <cmath>
+#include <thread>
+#include <mutex>
 
 using namespace std;
 
 rs2::pipeline initialize_camera() {
     rs2::pipeline p;
     rs2::config conf;
-    //conf.enable_stream(rs2_stream::RS2_STREAM_ACCEL);
-    //conf.enable_stream(rs2_stream::RS2_STREAM_GYRO);
-    conf.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F, 200);
-    conf.enable_stream(RS2_STREAM_GYRO, RS2_FORMAT_MOTION_XYZ32F, 200);
+    conf.enable_stream(rs2_stream::RS2_STREAM_ACCEL);
+    conf.enable_stream(rs2_stream::RS2_STREAM_GYRO);
     p.start(conf);
     return p;
 }
@@ -28,7 +28,7 @@ array<double, 3> accel_data(const rs2_vector& accel) {
 
 // Madgwick filter parameters
 constexpr double beta = 0.15, zeta = 0.01;
-double invSampleFreq = 1.0 / 200.0; // inverse sample frequency
+double invSampleFreq = 1.0 / 300.0; // inverse sample frequency
 double q10 = 1.0, q11 = 0.0, q12 = 0.0, q13 = 0.0;
 void MadgwickQuaternionUpdate(double ax, double ay, double az, double gyrox, double gyroy, double gyroz)
         {
@@ -118,22 +118,38 @@ void MadgwickQuaternionUpdate(double ax, double ay, double az, double gyrox, dou
             q13 = q4 * norm;
         }
 
-int main(int argc, char** argv) {
-    ros::init(argc, argv, "d455_imu_publisher");
-    rs2::pipeline camera_pipe;
-    camera_pipe = initialize_camera();
-    //publish_imu_data(camera_pipe);
-    ros::NodeHandle nh;
-    ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu_data", 10);
-    ros::Rate rate(200);  // 400Hz
 
+std::mutex mtx;
+rs2_vector latest_accel, latest_gyro;
+
+void sensor_data_acquisition(rs2::pipeline& camera_pipe) {
     while (ros::ok()) {
         rs2::frameset f = camera_pipe.wait_for_frames();
         auto accel_frame = f.first_or_default(rs2_stream::RS2_STREAM_ACCEL);
         auto gyro_frame = f.first_or_default(rs2_stream::RS2_STREAM_GYRO);
 
-        rs2_vector accel = accel_frame.as<rs2::motion_frame>().get_motion_data();
-        rs2_vector gyro = gyro_frame.as<rs2::motion_frame>().get_motion_data();
+        std::lock_guard<std::mutex> lock(mtx);
+        latest_accel = accel_frame.as<rs2::motion_frame>().get_motion_data();
+        latest_gyro = gyro_frame.as<rs2::motion_frame>().get_motion_data();
+    }
+}
+
+int main(int argc, char** argv) {
+    ros::init(argc, argv, "d455_imu_publisher");
+    rs2::pipeline camera_pipe = initialize_camera();
+    ros::NodeHandle nh;
+    ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu_data", 10);
+    ros::Rate rate(600);
+
+    std::thread sensor_thread(sensor_data_acquisition, std::ref(camera_pipe));
+
+    while (ros::ok()) {
+        rs2_vector accel, gyro;
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            accel = latest_accel;
+            gyro = latest_gyro;
+        }
 
         sensor_msgs::Imu imu_msg;
         imu_msg.header.frame_id = "imu_link";
@@ -159,11 +175,15 @@ int main(int argc, char** argv) {
         imu_msg.angular_velocity.y = -gyro_data_array[0];
         imu_msg.angular_velocity.z = -gyro_data_array[1];
         
-        //ROS_INFO("w:%lf, x:%lf, y:%lf z:%lf", q10, q11, q12, q13);
-
         pub.publish(imu_msg);
         rate.sleep();
         ros::spinOnce();
     }
+
+    sensor_thread.join();
     return 0;
 }
+
+
+
+
