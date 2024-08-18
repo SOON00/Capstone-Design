@@ -122,7 +122,7 @@ double desired_thrust = 0;//desired thrust              목표 스러스트
 
 //--------------------------------------------------------
 static double rp_limit=0.2;//(rad)       롤피치 각도제한 
-static double yaw_vel_limit=0.0003;//(rad/s) 요 각속도 제한
+static double yaw_vel_limit=0.001;//(rad/s) 요 각속도 제한
 
 static double T_limit=100;//(N)추력 제한
 static double yaw_limit=0;
@@ -143,7 +143,7 @@ double integ_limit=0.5;
 
 dualPIDController tau_Yaw(100,0,0,3,0,0);//100 3
 dualPIDController tau_Roll(5,0,0,1.5,0.5,0);// 5 1.5 0.5
-dualPIDController tau_Pitch(4,0,0,1.5,1.3,0);// 4 1.5 1.3
+dualPIDController tau_Pitch(4,0,0,1.5,1,0);// 4 1.5 1.3
 
 //--------------------------------------------------------
 
@@ -208,9 +208,12 @@ int main(int argc, char **argv){
             //ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", desired_roll, desired_pitch, y_d, desired_thrust);
             //ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
              
-            rpyT_ctrl(desired_roll, desired_pitch, desired_yaw, desired_thrust); //only attitude
+            //rpyT_ctrl(desired_roll, desired_pitch, desired_yaw, desired_thrust); //only attitude
             //rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust); //attitude+position
             //rpyT_ctrl(pose_r_d, pose_p_d, yaw_angle, desired_thrust); //only position
+            
+            if(RC_arr[0]<1500) rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust);
+            else if(RC_arr[0]>=1500) rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust+pose_T_d);
         }
         
         if(fabs(roll_angle)>1 || fabs(pitch_angle)>1) { // Emergency Stop

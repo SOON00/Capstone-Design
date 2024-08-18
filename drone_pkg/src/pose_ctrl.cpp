@@ -28,7 +28,7 @@ private:
     double prev_rate_D_term;
 public:
     dualPIDController(double angle_p, double angle_i, double angle_d, double rate_p, double rate_i, double rate_d) :
-    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(2),prev_rate_D_term(0) {}
+    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.1),prev_rate_D_term(0) {}
     double calculate(double target, double angle_input, double rate_input, double dt){
         double angle_error = target - angle_input;
         
@@ -120,14 +120,15 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
     return;
 }
 
-dualPIDController desired_X(0.3,0,0,0.3,0,0);//0.3 0.3 roll
-dualPIDController desired_Y(0,0,0,0,0,0);//1 0.7 1 pitch
-PIDController desired_Z(0,0,0);
+dualPIDController desired_X(0.4,0,0,0.3,0.1,0);//0.3 0.3 roll
+dualPIDController desired_Y(0.3,0,0,0.3,0,0);//1 0.7 1 pitch
+dualPIDController desired_Z(1,0,0,1,0,0);
 
 float posX, posY, posZ;
-float desired_posX = 0, desired_posY = 0, desired_posZ = 0.2;
+float desired_posX = 0, desired_posY = 0, desired_posZ = 0.3;
 
 float ang_limit = 0.1; //0.1
+float thrust_limit = 10;//10
 
 ros::Publisher pub;
 ros::Publisher t265_yaw;
@@ -176,16 +177,16 @@ int main(int argc, char** argv) {
             else if (RC_arr[6] > 1900) RC_arr[6] = 1900;
             //desired_posY = (RC_arr[6]-1100)/800;
             
-            pose_cmd.x = desired_X.calculate(desired_posY, posY, -linear_velocity_y, 0.01);      
-            pose_cmd.y = desired_Y.calculate(desired_posX, posX, -linear_velocity_x, 0.01);
-            pose_cmd.z = desired_Z.calculate(desired_posZ, posZ, 0.01,0);
+            pose_cmd.x = desired_X.calculate(desired_posY, posY_rot, -linear_velocity_y, 0.01);      
+            pose_cmd.y = desired_Y.calculate(desired_posX, posX_rot, -linear_velocity_x, 0.01);
+            pose_cmd.z = desired_Z.calculate(desired_posZ, posZ, linear_velocity_z, 0.01);
 
             if (pose_cmd.x > ang_limit) pose_cmd.x = ang_limit;
             else if (pose_cmd.x < -ang_limit) pose_cmd.x = -ang_limit;
             if (pose_cmd.y > ang_limit) pose_cmd.y = ang_limit;
             else if (pose_cmd.y < -ang_limit) pose_cmd.y = -ang_limit;
-            if (pose_cmd.z > 10) pose_cmd.z = 10;
-            else if (pose_cmd.z < -10) pose_cmd.z = -10;
+            if (pose_cmd.z > thrust_limit) pose_cmd.z = thrust_limit;
+            else if (pose_cmd.z < -thrust_limit) pose_cmd.z = -thrust_limit;
 
             pub.publish(pose_cmd);
             t265_yaw.publish(yaw_cmd);
