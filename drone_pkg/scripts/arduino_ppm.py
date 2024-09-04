@@ -7,8 +7,6 @@ import serial
 import numpy as np
 from collections import deque
 
-ser = serial.Serial('/dev/ttyUSB0', 9600)
-
 # 버퍼 크기 설정
 BUFFER_SIZE = 5
 
@@ -23,6 +21,17 @@ buffers = {
     'arr': deque(maxlen=BUFFER_SIZE)
 }
 
+def connect_serial():
+    while not rospy.is_shutdown():
+        try:
+            ser = serial.Serial('/dev/ttyPPM', 9600)
+            print("Serial connection established.")
+            return ser
+        except serial.SerialException:
+            print("Failed to connect to /dev/ttyPPM. Retrying in 5 seconds...")
+            time.sleep(5)
+    return None
+
 def apply_median_filter(data_dict):
     filtered_data = []
     for key, buffer in data_dict.items():
@@ -36,40 +45,54 @@ def apply_median_filter(data_dict):
 def pub_imu():
     pub = rospy.Publisher('PPM', Float32MultiArray, queue_size=10)
     r = rospy.Rate(200)
+    ser = connect_serial()
+
+    if ser is None:  # rospy is shutting down
+        return
+
     while not rospy.is_shutdown():
-        if ser.in_waiting > 0:
-            received_data = ser.readline().decode('utf-8', errors='ignore').rstrip()
-            received_data = received_data.replace("*", "")
-            split_data = received_data.split()
-            # print(split_data)
-            try:
-                roll, pitch, yaw = split_data[0], split_data[1], split_data[2]
-                gX, gY, gZ = split_data[3], split_data[4], split_data[5]
-                arr = split_data[6]
+        try:
+            if ser.in_waiting > 0:
+                try:
+                    received_data = ser.readline().decode('utf-8', errors='ignore').rstrip()
+                    received_data = received_data.replace("*", "")
+                    split_data = received_data.split()
 
-                # 버퍼에 데이터 추가
-                buffers['roll'].append(float(roll))
-                buffers['pitch'].append(float(pitch))
-                buffers['yaw'].append(float(yaw))
-                buffers['gX'].append(float(gX))
-                buffers['gY'].append(float(gY))
-                buffers['gZ'].append(float(gZ))
-                buffers['arr'].append(float(arr))
+                    roll, pitch, yaw = split_data[0], split_data[1], split_data[2]
+                    gX, gY, gZ = split_data[3], split_data[4], split_data[5]
+                    arr = split_data[6]
 
-                # 중간값 필터 적용
-                filtered_values = apply_median_filter(buffers)
+                    # 버퍼에 데이터 추가
+                    buffers['roll'].append(float(roll))
+                    buffers['pitch'].append(float(pitch))
+                    buffers['yaw'].append(float(yaw))
+                    buffers['gX'].append(float(gX))
+                    buffers['gY'].append(float(gY))
+                    buffers['gZ'].append(float(gZ))
+                    buffers['arr'].append(float(arr))
 
-                data_to_send = Float32MultiArray()
-                data_to_send.data = filtered_values
-                pub.publish(data_to_send)
-                r.sleep()
+                    # 중간값 필터 적용
+                    filtered_values = apply_median_filter(buffers)
 
-            except Exception as e:
-                print(f'Error: {e}')
-                continue
+                    data_to_send = Float32MultiArray()
+                    data_to_send.data = filtered_values
+                    pub.publish(data_to_send)
+                    r.sleep()
+
+                except (ValueError, IndexError) as e:
+                    print(f'Error processing data: {e}')
+                    continue
+
+        except (serial.SerialException, OSError) as e:
+            print(f"Serial connection lost: {e}. Reconnecting...")
+            ser = connect_serial()
+            if ser is None:
+                break  # rospy is shutting down
 
 if __name__ == '__main__':
     rospy.init_node('PPM_node')
-    pub_imu()
-    rospy.spin()
+    try:
+        pub_imu()
+    except rospy.ROSInterruptException:
+        pass
 

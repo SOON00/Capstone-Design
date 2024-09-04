@@ -28,7 +28,7 @@ private:
     double prev_rate_D_term;
 public:
     dualPIDController(double angle_p, double angle_i, double angle_d, double rate_p, double rate_i, double rate_d) :
-    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.1),prev_rate_D_term(0) {}
+    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.2),prev_rate_D_term(0) {}
     double calculate(double target, double angle_input, double rate_input, double dt){
         double angle_error = target - angle_input;
         
@@ -42,8 +42,8 @@ public:
         
         double target_rate = angle_P_term + angle_I_term + angle_D_term;
         
-        //if(target_rate>0.18) target_rate = 0.18;
-        //else if(target_rate<-0.18) target_rate = -0.18;
+        //if(target_rate>0.15) target_rate = 0.15;
+        //else if(target_rate<-0.15) target_rate = -0.15;
         
         double rate_error = target_rate - rate_input;
         
@@ -75,15 +75,20 @@ private:
 
     double integral;
     double pre_error;
+    double i_error_limit;
 public:
     PIDController(double p, double i, double d) :
-    Kp(p), Ki(i), Kd(d), integral(0), pre_error(0) {}
+    Kp(p), Ki(i), Kd(d), integral(0), pre_error(0), i_error_limit(0.3) {}
     double calculate(double target, double input, double dt, double target_rate){
         double error = target - input;
         
+        double i_error = error;
+        if(i_error>i_error_limit) i_error = i_error_limit;
+        else if(i_error<-i_error_limit) i_error = -i_error_limit;
+        
         double P_term = Kp*error;
         
-        integral += error*dt;
+        integral += i_error*dt;
         double I_term = Ki * integral;
         
         double derivative = target_rate;
@@ -120,15 +125,18 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
     return;
 }
 
-dualPIDController desired_X(0.4,0,0,0.3,0.1,0);//0.3 0.3 roll
+dualPIDController desired_X(0.3,0,0,0.3,0,0);//0.3 0.3 roll
 dualPIDController desired_Y(0.3,0,0,0.3,0,0);//1 0.7 1 pitch
-dualPIDController desired_Z(1,0,0,1,0,0);
+PIDController desired_Z(15,5,0);
 
 float posX, posY, posZ;
-float desired_posX = 0, desired_posY = 0, desired_posZ = 0.3;
+float desired_posX = 0, desired_posY = 0, desired_posZ = 0;
+
+float altitude = 0;
 
 float ang_limit = 0.1; //0.1
-float thrust_limit = 10;//10
+float thrust_limit = 0.1;//10
+float altitude_limit = 1;
 
 ros::Publisher pub;
 ros::Publisher t265_yaw;
@@ -177,17 +185,20 @@ int main(int argc, char** argv) {
             else if (RC_arr[6] > 1900) RC_arr[6] = 1900;
             //desired_posY = (RC_arr[6]-1100)/800;
             
+            altitude = RC_arr[3];
+            desired_posZ = altitude_limit*(((double)1500-altitude)/(double)400)+1; //1100~1900 -1500 -400~400 /400 -1~1
+            
             pose_cmd.x = desired_X.calculate(desired_posY, posY_rot, -linear_velocity_y, 0.01);      
             pose_cmd.y = desired_Y.calculate(desired_posX, posX_rot, -linear_velocity_x, 0.01);
-            pose_cmd.z = desired_Z.calculate(desired_posZ, posZ, linear_velocity_z, 0.01);
-
+            pose_cmd.z = desired_Z.calculate(desired_posZ, posZ, 0.01, linear_velocity_z);
+		
             if (pose_cmd.x > ang_limit) pose_cmd.x = ang_limit;
             else if (pose_cmd.x < -ang_limit) pose_cmd.x = -ang_limit;
             if (pose_cmd.y > ang_limit) pose_cmd.y = ang_limit;
             else if (pose_cmd.y < -ang_limit) pose_cmd.y = -ang_limit;
-            if (pose_cmd.z > thrust_limit) pose_cmd.z = thrust_limit;
-            else if (pose_cmd.z < -thrust_limit) pose_cmd.z = -thrust_limit;
-
+            //if (pose_cmd.z > thrust_limit) pose_cmd.z = thrust_limit;
+            //else if (pose_cmd.z < -thrust_limit) pose_cmd.z = -thrust_limit;
+	    //ROS_INFO("pose_T_d: %f", pose_cmd.z);
             pub.publish(pose_cmd);
             t265_yaw.publish(yaw_cmd);
 
@@ -196,7 +207,6 @@ int main(int argc, char** argv) {
             //ROS_INFO("linear y: %.2f, linear x: %.2f", linear_velocity_y,linear_velocity_x);
             //ROS_INFO("roll: %.2f, pitch: %.2f", pose_cmd.x,pose_cmd.y);
             
-            //ROS_INFO("PPM: %f", desired_posY);
 
         } catch (tf2::TransformException &ex) {
             ROS_WARN("%s", ex.what());
