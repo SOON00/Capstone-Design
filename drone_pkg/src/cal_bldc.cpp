@@ -17,7 +17,7 @@ std_msgs::Int16MultiArray bldc_test;
 
 void PPMCallback(const std_msgs::Float32MultiArray::ConstPtr &array);
 
-PCA9685 pca9685(0x40, 1);
+PCA9685 pca9685(0x40, 9);
 
 int mapping(double value,double min_pwm, double max_pwm,double min_pulse,double max_pulse){
     double pwm_range = max_pwm-min_pwm;//800
@@ -39,6 +39,7 @@ void setServo(int channel, int pulse_width) {
 
 int min_pulse = 900;//1640
 int max_pulse = 1550;//3200
+int loop_count = 0;
 
 int motor1,motor2,motor3,motor4;
 int main(int argc, char* argv[]) {
@@ -46,7 +47,7 @@ int main(int argc, char* argv[]) {
     ros::NodeHandle nh;
     ros::Publisher bldc=nh.advertise<std_msgs::Int16MultiArray>("bldc_test", 10);
     ros::Subscriber cmd=nh.subscribe("/PPM", 10, &PPMCallback);
-    ros::Rate loop_rate(200);
+    ros::Rate loop_rate(100);
     pca9685.init();
     while(ros::ok()){
         motor1=2*(PPM[3]-1000);
@@ -62,10 +63,13 @@ int main(int argc, char* argv[]) {
         motor3 = mapping(motor3,200,1800,min_pulse,max_pulse);
         motor4 = mapping(motor4,200,1800,min_pulse,max_pulse);
         
+        if(loop_count>10){
         pca9685.setPWM(15, 0, motor1);
         pca9685.setPWM(14, 0, motor2);
         pca9685.setPWM(1, 0, motor3);
         pca9685.setPWM(0, 0, motor4);
+        }
+        loop_count++;
         
         bldc_test.data.resize(4);
         for(int i=0; i<4; i++){

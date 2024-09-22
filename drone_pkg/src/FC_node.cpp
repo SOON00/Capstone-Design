@@ -143,9 +143,11 @@ int thrust = 0;
 
 double integ_limit=0.5;
 
-dualPIDController tau_Yaw(100,0,0,3,0,0);//100 3
-dualPIDController tau_Roll(2.5,0,0,3,3,0.3);// 1.75 2 2 0.3
-dualPIDController tau_Pitch(1.75,0,0,3,3,0.2);// 1.5 2 5 0.2
+dualPIDController tau_Yaw(150,0,0,3,0,0);//100 3
+//dualPIDController tau_Roll(2.5,0,0,3,3,0.3);// 1.75 2 2 0.3     2.5 3 3 0.3
+//dualPIDController tau_Pitch(1.75,0,0,3,3,0.2);// 1.5 2 5 0.2    1.75 3 3 0.2
+PIDController tau_Roll(3,0,0.5);
+PIDController tau_Pitch(3,0,0.5);
 
 //--------------------------------------------------------
 
@@ -175,7 +177,7 @@ int main(int argc, char **argv){
     ros::Subscriber pose_cmd = nh.subscribe("/pose_cmd", 10, poseCmdCallback);
     ros::Subscriber yaw_cmd = nh.subscribe("/yaw_cmd", 10, yawCmdCallback);
 
-    ros::Rate loop_rate(200);
+    ros::Rate loop_rate(100);
 
     int flag_imu=0;//monitoring imu's availability
 
@@ -210,8 +212,8 @@ int main(int argc, char **argv){
             //ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", desired_roll, desired_pitch, y_d, desired_thrust);
             //ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
              
-            rpyT_ctrl(desired_roll, desired_pitch, desired_yaw, desired_thrust); //only attitude
-            //rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust); //attitude+position
+            //rpyT_ctrl(desired_roll, desired_pitch, desired_yaw, desired_thrust); //only attitude
+            rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust); //attitude+position
             //rpyT_ctrl(pose_r_d, pose_p_d, yaw_angle, desired_thrust); //only position
             
             if(RC_arr[0]<1500){

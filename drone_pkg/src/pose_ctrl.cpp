@@ -101,20 +101,46 @@ public:
         return controlOutput; 
     }
 };
+
+class LowPassFilter {
+private:
+    double prev_value;
+    double alpha;
+
+public:
+    LowPassFilter(double cutoff_freq, double dt) : prev_value(0.0) {
+        // Alpha is the smoothing factor based on the cutoff frequency and sampling time (dt)
+        double RC = 1.0 / (2.0 * M_PI * cutoff_freq);
+        alpha = dt / (RC + dt);
+    }
+
+    double filter(double new_value) {
+        prev_value = alpha * new_value + (1.0 - alpha) * prev_value;
+        return prev_value;
+    }
+};
+
+
 //--------------------------------------------------------
 volatile double linear_velocity_x = 0;
 volatile double linear_velocity_y = 0;
-double linear_velocity_z = 0;
+volatile double linear_velocity_z = 0;
 
-void odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
-{
-    double linear_v_x = msg->twist.twist.linear.x;
-    double linear_v_y = msg->twist.twist.linear.y;
-    double linear_v_z = msg->twist.twist.linear.z;
-    linear_velocity_x = linear_v_x;
-    linear_velocity_y = linear_v_y;
-    linear_velocity_z = linear_v_z;
+LowPassFilter lpf_x(0.5, 0.01);  // cutoff frequency and 0.01s sampling time
+LowPassFilter lpf_z(0.5, 0.01);
 
+geometry_msgs::Vector3 filtered_vel_msg;
+
+void odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
+    // Apply low-pass filter to the linear velocities
+    linear_velocity_x = lpf_x.filter(msg->twist.twist.linear.x);
+    linear_velocity_y = msg->twist.twist.linear.y;
+    linear_velocity_z = lpf_z.filter(msg->twist.twist.linear.z);
+
+    // Set filtered velocities in the message
+    filtered_vel_msg.x = linear_velocity_x;
+    filtered_vel_msg.y = linear_velocity_y;
+    filtered_vel_msg.z = linear_velocity_z;
 }
 
 float RC_arr[7];//0:roll, 1:pitch, 2:yaw, 3:thrust, 4:3-step switch
@@ -125,7 +151,7 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
     return;
 }
 
-dualPIDController desired_X(0.3,0,0,0.3,0,0);//0.3 0.3 roll
+dualPIDController desired_X(0.5,0,0,0.7,0,0);//0.3 0.3 roll
 dualPIDController desired_Y(0.3,0,0,0.3,0,0);//1 0.7 1 pitch
 PIDController desired_Z(15,5,0);
 
@@ -142,6 +168,7 @@ ros::Publisher pub;
 ros::Publisher t265_yaw;
 geometry_msgs::Vector3 pose_cmd;
 std_msgs::Float32 yaw_cmd;
+//ros::Publisher filtered_vel_pub;
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "pose_ctrl");
@@ -149,6 +176,7 @@ int main(int argc, char** argv) {
 
     pub = node.advertise<geometry_msgs::Vector3>("/pose_cmd", 10);
     t265_yaw = node.advertise<std_msgs::Float32>("/yaw_cmd", 10);
+    //filtered_vel_pub = node.advertise<geometry_msgs::Vector3>("/filtered_linear_velocity", 10);
     
     ros::Subscriber devo=node.subscribe("/PPM", 10, &arrayCallback);
     ros::Subscriber odom_sub = node.subscribe("/camera/odom/sample", 10, odomCallback);//linear vel
@@ -201,6 +229,7 @@ int main(int argc, char** argv) {
 	    //ROS_INFO("pose_T_d: %f", pose_cmd.z);
             pub.publish(pose_cmd);
             t265_yaw.publish(yaw_cmd);
+            //filtered_vel_pub.publish(filtered_vel_msg);
 
             //ROS_INFO("(x, y): (%.2f, %.2f)", posX, posY);
             //ROS_INFO("(x, y): (%.2f, %.2f)", posX_rot, posY_rot);

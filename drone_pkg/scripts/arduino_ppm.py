@@ -28,8 +28,8 @@ def connect_serial():
             print("Serial connection established.")
             return ser
         except serial.SerialException:
-            print("Failed to connect to /dev/ttyPPM. Retrying in 5 seconds...")
-            time.sleep(5)
+            print("Failed to connect to /dev/ttyPPM. Retrying in 1 seconds...")
+            time.sleep(1)
     return None
 
 def apply_median_filter(data_dict):
