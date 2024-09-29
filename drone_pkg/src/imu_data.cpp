@@ -10,6 +10,28 @@
 
 using namespace std;
 
+class LowPassFilter {
+private:
+    double prev_value;
+    double alpha;
+
+public:
+    LowPassFilter(double cutoff_freq, double dt) : prev_value(0.0) {
+        // Alpha is the smoothing factor based on the cutoff frequency and sampling time (dt)
+        double RC = 1.0 / (2.0 * M_PI * cutoff_freq);
+        alpha = dt / (RC + dt);
+    }
+
+    double filter(double new_value) {
+        prev_value = alpha * new_value + (1.0 - alpha) * prev_value;
+        return prev_value;
+    }
+};
+
+LowPassFilter lpf_x(70, 0.005);  // cutoff frequency and 0.01s sampling time
+LowPassFilter lpf_y(70, 0.005);
+//LowPassFilter lpf_z(70, 0.005);
+
 const double PI = 3.1415926;
 // 초기화 함수: RealSense D455 카메라 스트림 설정
 rs2::pipeline initialize_camera() {
@@ -159,7 +181,7 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
     ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu_data", 10);
     ros::Subscriber devo = nh.subscribe("/PPM", 10, &arrayCallback);
-    ros::Rate rate(100);
+    ros::Rate rate(200);
 
     // Z축 방향으로 45도 회전 (라디안 단위)
 
@@ -209,8 +231,9 @@ int main(int argc, char** argv) {
         imu_msg.linear_acceleration.y = rotated_accel.y();
         imu_msg.linear_acceleration.z = rotated_accel.z();
 
-        imu_msg.angular_velocity.x = rotated_gyro.x();
-        imu_msg.angular_velocity.y = rotated_gyro.y();
+
+        imu_msg.angular_velocity.x = lpf_x.filter(rotated_gyro.x());
+        imu_msg.angular_velocity.y = lpf_y.filter(rotated_gyro.y());
         imu_msg.angular_velocity.z = rotated_gyro.z();
 
         // 쿼터니언이 제대로 계산되었는지 확인을 위한 로그 (필요 시 활성화)

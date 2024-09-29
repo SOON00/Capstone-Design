@@ -28,7 +28,7 @@ private:
     double prev_rate_D_term;
 public:
     dualPIDController(double angle_p, double angle_i, double angle_d, double rate_p, double rate_i, double rate_d) :
-    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.2),prev_rate_D_term(0) {}
+    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.1),prev_rate_D_term(0) {}
     double calculate(double target, double angle_input, double rate_input, double dt){
         double angle_error = target - angle_input;
         
@@ -78,7 +78,7 @@ private:
     double i_error_limit;
 public:
     PIDController(double p, double i, double d) :
-    Kp(p), Ki(i), Kd(d), integral(0), pre_error(0), i_error_limit(0.3) {}
+    Kp(p), Ki(i), Kd(d), integral(0), pre_error(0), i_error_limit(1.5) {}
     double calculate(double target, double input, double dt, double target_rate){
         double error = target - input;
         
@@ -151,16 +151,16 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
     return;
 }
 
-dualPIDController desired_X(0.5,0,0,0.7,0,0);//0.3 0.3 roll
-dualPIDController desired_Y(0.3,0,0,0.3,0,0);//1 0.7 1 pitch
-PIDController desired_Z(15,5,0);
+dualPIDController desired_X(0.6,0,0,0.6,0,0);//0.3 0.3 roll
+dualPIDController desired_Y(0.6,0,0,0.6,0,0);//1 0.7 1 pitch
+PIDController desired_Z(180,15,50);
 
 float posX, posY, posZ;
 float desired_posX = 0, desired_posY = 0, desired_posZ = 0;
 
 float altitude = 0;
 
-float ang_limit = 0.1; //0.1
+float ang_limit = 0.15; //0.1
 float thrust_limit = 0.1;//10
 float altitude_limit = 1;
 
@@ -169,6 +169,7 @@ ros::Publisher t265_yaw;
 geometry_msgs::Vector3 pose_cmd;
 std_msgs::Float32 yaw_cmd;
 //ros::Publisher filtered_vel_pub;
+ros::Publisher rpy_pub;
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "pose_ctrl");
@@ -177,6 +178,7 @@ int main(int argc, char** argv) {
     pub = node.advertise<geometry_msgs::Vector3>("/pose_cmd", 10);
     t265_yaw = node.advertise<std_msgs::Float32>("/yaw_cmd", 10);
     //filtered_vel_pub = node.advertise<geometry_msgs::Vector3>("/filtered_linear_velocity", 10);
+    rpy_pub = node.advertise<geometry_msgs::Vector3>("/rpy", 10);
     
     ros::Subscriber devo=node.subscribe("/PPM", 10, &arrayCallback);
     ros::Subscriber odom_sub = node.subscribe("/camera/odom/sample", 10, odomCallback);//linear vel
@@ -203,6 +205,14 @@ int main(int argc, char** argv) {
             tf2::Matrix3x3 m(q);
             double roll, pitch, yaw;
             m.getRPY(roll, pitch, yaw);
+            //ROS_INFO("(roll, pitch): (%f, %f)", roll, pitch);
+            
+            geometry_msgs::Vector3 rpy_msg;
+            rpy_msg.x = roll;
+            rpy_msg.y = pitch;
+            rpy_msg.z = yaw;
+            rpy_pub.publish(rpy_msg);
+            
             yaw_cmd.data = yaw;
             yaw *=-1;            
             // 좌표 회전 변환
