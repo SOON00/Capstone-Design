@@ -147,7 +147,7 @@ double integ_limit=0.5;
 
 dualPIDController tau_Yaw(0,0,0,0,0,0);//200 3
 dualPIDController tau_Roll(0,0,0,0,0,0);// 1.75 2 2 0.3     2.5 3 3 0.3  4 1.5 0.5 0.1
-dualPIDController tau_Pitch(4,0,0,2.75,0,0.4);// 1.5 2 5 0.2    1.75 3 3 0.2
+dualPIDController tau_Pitch(2,0,0,2,0,0);// 1.5 2 5 0.2    1.75 3 3 0.2
 //PIDController tau_Roll(0,0,3);
 //PIDController tau_Pitch(0,0,3);
 
