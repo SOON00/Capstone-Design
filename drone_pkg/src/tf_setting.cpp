@@ -33,7 +33,7 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array) {
     euler_rot = euler_rot*PI/180;
     y = 114.5 + 203.5*cos(euler_rot);
     x = 203.5*sin(euler_rot);
-    real_rot = atan2(x,y);
+    real_rot =0;// atan2(x,y);
     return;
 }
 

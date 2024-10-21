@@ -146,6 +146,7 @@ add_executable(tf_setting src/tf_setting.cpp)
 add_executable(new_origin src/new_origin.cpp)
 add_executable(rpy_check src/rpy_check.cpp)
 add_executable(pose_ctrl src/pose_ctrl.cpp)
+add_executable(new_FC_node src/new_FC_node.cpp)
 
 include_directories(include)
 
@@ -168,6 +169,7 @@ add_dependencies(tf_setting ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTE
 add_dependencies(new_origin ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(rpy_check ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(pose_ctrl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(new_FC_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 #add_dependencies(PCA9685 ${catkin_EXPORTED_TARGETS})
 add_dependencies(bldc_process ${catkin_EXPORTED_TARGETS})
 add_dependencies(cal_bldc ${catkin_EXPORTED_TARGETS})
@@ -179,6 +181,7 @@ target_link_libraries(tf_setting ${catkin_LIBRARIES})
 target_link_libraries(new_origin ${catkin_LIBRARIES})
 target_link_libraries(rpy_check ${catkin_LIBRARIES})
 target_link_libraries(pose_ctrl ${catkin_LIBRARIES})
+target_link_libraries(new_FC_node ${catkin_LIBRARIES})
 
 #############
 ## Install ##

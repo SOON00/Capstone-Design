@@ -102,6 +102,66 @@ public:
     }
 };
 
+class zPIDController{
+private:
+    double angle_Kp;
+    double angle_Ki;
+    double angle_Kd;
+
+    double rate_Kp;
+    double rate_Ki;
+    double rate_Kd;
+    
+    double prevError;
+    double angle_integral;
+    double rate_integral;
+    
+    double i_limit;
+    
+    double prev_rate_D_term;
+public:
+    zPIDController(double angle_p, double angle_i, double angle_d, double rate_p, double rate_i, double rate_d) :
+    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.1),prev_rate_D_term(0) {}
+    double calculate(double target, double angle_input, double rate_input, double dt){
+        double angle_error = target - angle_input;
+        
+        double angle_P_term = angle_Kp*angle_error;
+        
+        angle_integral += angle_error*dt;
+        if(fabs(angle_integral)>i_limit)	angle_integral=(angle_integral/fabs(angle_integral))*i_limit;
+        double angle_I_term = angle_Ki * angle_integral;
+        
+        double angle_D_term = angle_Kd * rate_input;
+        
+        double target_rate = angle_P_term + angle_I_term + angle_D_term;
+        
+        //if(target_rate>0.15) target_rate = 0.15;
+        //else if(target_rate<-0.15) target_rate = -0.15;
+        
+        double rate_error = target_rate - rate_input;
+        
+        double rate_P_term = rate_Kp*rate_error;
+        
+        rate_integral += rate_error*dt;
+        if(fabs(rate_integral)>i_limit)	rate_integral=(rate_integral/fabs(rate_integral))*i_limit;
+        double rate_I_term = rate_Ki * rate_integral;
+        
+        double rate_D_term = (rate_error-prevError)/dt;
+        
+        rate_D_term = rate_Kd * (0.95 * prev_rate_D_term + 0.05 * rate_D_term);
+        
+        prev_rate_D_term = rate_D_term;
+        
+        prevError = rate_error;
+        
+        double controlOutput = rate_P_term + rate_I_term + rate_D_term;
+        //if(controlOutput>5) controlOutput = 5;
+        //else if(controlOutput<-5) controlOutput = -5;
+        
+        return controlOutput; 
+    }
+};//dualPID control class
+
 class LowPassFilter {
 private:
     double prev_value;
@@ -151,17 +211,17 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
     return;
 }
 
-dualPIDController desired_X(0.6,0,0,0.6,0,0);//0.3 0.3 roll
-dualPIDController desired_Y(0.6,0,0,0.6,0,0);//1 0.7 1 pitch
-PIDController desired_Z(180,15,50);
+dualPIDController desired_X(0.4,0,0,0.3,0,0);//0.3 0.3 roll
+dualPIDController desired_Y(0.4,0,0,0.3,0,0);//1 0.7 1 pitch
+dualPIDController desired_Z(0.5,0,0,5,0,0);
 
 float posX, posY, posZ;
 float desired_posX = 0, desired_posY = 0, desired_posZ = 0;
 
 float altitude = 0;
 
-float ang_limit = 0.15; //0.1
-float thrust_limit = 0.1;//10
+float ang_limit = 0.2; //0.1
+float thrust_limit = 5;//10
 float altitude_limit = 1;
 
 ros::Publisher pub;
@@ -228,14 +288,14 @@ int main(int argc, char** argv) {
             
             pose_cmd.x = desired_X.calculate(desired_posY, posY_rot, -linear_velocity_y, 0.01);      
             pose_cmd.y = desired_Y.calculate(desired_posX, posX_rot, -linear_velocity_x, 0.01);
-            pose_cmd.z = desired_Z.calculate(desired_posZ, posZ, 0.01, linear_velocity_z);
+            pose_cmd.z = desired_Z.calculate(desired_posZ, posZ, linear_velocity_z, 0.01);
 		
             if (pose_cmd.x > ang_limit) pose_cmd.x = ang_limit;
             else if (pose_cmd.x < -ang_limit) pose_cmd.x = -ang_limit;
             if (pose_cmd.y > ang_limit) pose_cmd.y = ang_limit;
             else if (pose_cmd.y < -ang_limit) pose_cmd.y = -ang_limit;
-            //if (pose_cmd.z > thrust_limit) pose_cmd.z = thrust_limit;
-            //else if (pose_cmd.z < -thrust_limit) pose_cmd.z = -thrust_limit;
+            if (pose_cmd.z > thrust_limit) pose_cmd.z = thrust_limit;
+            else if (pose_cmd.z < -thrust_limit) pose_cmd.z = -thrust_limit;
 	    //ROS_INFO("pose_T_d: %f", pose_cmd.z);
             pub.publish(pose_cmd);
             t265_yaw.publish(yaw_cmd);

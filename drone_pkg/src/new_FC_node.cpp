@@ -41,7 +41,7 @@ private:
     double prev_rate_D_term;
 public:
     dualPIDController(double angle_p, double angle_i, double angle_d, double rate_p, double rate_i, double rate_d) :
-    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.2),prev_rate_D_term(0) {}
+    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(2),prev_rate_D_term(0) {}
     double calculate(double target, double angle_input, double rate_input, double dt){
         double angle_error = target - angle_input;
         
@@ -54,6 +54,7 @@ public:
         double angle_D_term = angle_Kd * rate_input;
         
         double target_rate = angle_P_term + angle_I_term - angle_D_term;
+        //double target_rate = target;
         
         double rate_error = target_rate - rate_input;
         
@@ -105,6 +106,43 @@ public:
     }
 };//PID control class
 
+class ratePIDController{
+private:
+    double Kp;
+    double Ki;
+    double Kd;
+
+    double integral;
+    double i_limit;
+    
+    double prevError;
+    double prev_D_term;
+public:
+    ratePIDController(double p, double i, double d) :
+    Kp(p), Ki(i), Kd(d), integral(0), i_limit(0.2), prevError(0), prev_D_term(0) {}
+    double calculate(double target, double input, double dt){
+        double error = target - input;
+        
+        double P_term = Kp*error;
+        
+        integral += error*dt;
+        if(fabs(integral)>i_limit) integral=(integral/fabs(integral))*i_limit;
+        double I_term = Ki * integral;
+        
+        double D_term = (error-prevError)/dt;
+        
+        D_term = Kd * (0.9 * prev_D_term + 0.1 * D_term);
+        
+        prev_D_term = D_term;
+        
+        prevError = error;
+        
+        double controlOutput = P_term + I_term + D_term;
+        
+        return controlOutput; 
+    }
+};//PID control class
+
 //---------------------------------------------------------------
 int RC_arr[7];//0:roll, 1:pitch, 2:yaw, 3:thrust, 4:3-step switch
 
@@ -118,8 +156,6 @@ double desired_pitch = 0;//desired pitch angle          목표 피치값
 double desired_yaw = 0;//desired yaw angle              목표 요값
 double desired_yaw_vel = 0;//yaw increment tangent      각속도 목표값
 double desired_thrust = 0;//desired thrust              목표 스러스트
-
-double takeoff = 0;
 
 //--------------------------------------------------------
 static double rp_limit=0.2;//(rad)       롤피치 각도제한 
@@ -135,19 +171,18 @@ double Force_to_PWM(double F, double Thrust);
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d);
 void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data);
 void poseCmdCallback(const geometry_msgs::Vector3::ConstPtr& msg);
-void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg);
 double constrain(double F);
 //--------------------------------------------------------
 int thrust = 0;
 
 double integ_limit=0.5;
 
-dualPIDController tau_Yaw(0,0,0,0,0,0);//100 3
-dualPIDController tau_Roll(5.5,0,0.5,1,0,0);//  5 0 0 1.5 0.5 0
-dualPIDController tau_Pitch(5.5,0,0.5,1,0,0);// 4 0 0 1.5 1 0.1
+ratePIDController tau_Yaw(80,0,0);//60
+//PIDController tau_Roll(8,2,0.8);// 10.5 7 1.5 8 2 2
+//PIDController tau_Pitch(8,2,0.8);//12 1 1.8
+dualPIDController tau_Roll(6,1.5,0.1,1,0.5,0.4);//           6 1   0    1.8 0.15 0.5 
+dualPIDController tau_Pitch(6,1.5,0.1,1,0.5,0.4);//  7 1.5 0.01 2   0.15 0.5
 //6 1.5 0.1 1 0.5 0.4
-//PIDController tau_Roll(0,0,3);
-//PIDController tau_Pitch(0,0,3);
 
 //--------------------------------------------------------
 
@@ -157,12 +192,6 @@ double yaw_angle=0;
 double roll_vel=0;
 double pitch_vel=0;
 double yaw_vel=0;
-
-float pose_r_d=0;
-float pose_p_d=0;
-float pose_T_d=0;
-
-float t265_yaw=0;
 
 int main(int argc, char **argv){
     ros::init(argc, argv, "FC_node");
@@ -174,8 +203,6 @@ int main(int argc, char **argv){
     //Subscriber
     ros::Subscriber imu_data=nh.subscribe("/imu_data", 10, &imu_Callback);
     ros::Subscriber devo=nh.subscribe("/PPM", 10, &arrayCallback);
-    ros::Subscriber pose_cmd = nh.subscribe("/pose_cmd", 10, poseCmdCallback);
-    ros::Subscriber yaw_cmd = nh.subscribe("/yaw_cmd", 10, yawCmdCallback);
 
     ros::Rate loop_rate(200);
 
@@ -186,7 +213,7 @@ int main(int argc, char **argv){
     PWM_cmd.data[1]=200;
     PWM_cmd.data[2]=200;
     PWM_cmd.data[3]=200;
-            
+
     while(ros::ok()){
         if(RC_arr[5]>1500){ // Emergency Stop
             flag_imu=0;
@@ -200,7 +227,7 @@ int main(int argc, char **argv){
 		
         else{//5번 스위치 작동
 	    if(flag_imu!=1){
-	        desired_yaw=yaw_angle;//initial desired yaw setting
+	        //desired_yaw=yaw_angle;//initial desired yaw setting
 		flag_imu=1;
 	    }		
 	    desired_roll = -rp_limit*((RC_arr[4]-(double)1500)/(double)500);
@@ -211,31 +238,14 @@ int main(int argc, char **argv){
 	    
 	    desired_yaw_vel = yaw_vel_limit*((yaw_limit-(double)1500)/(double)500);
 	    desired_yaw -= desired_yaw_vel;
-	    //ROS_INFO("r:%lf", yaw_angle);
 	                 
 	    thrust = RC_arr[3];
             desired_thrust = T_limit*(((double)1500-thrust)/(double)400)+100; //1100~1900 -1500 -400~400 /400 -1~1
-            //ROS_INFO("r:%lf, p:%lf, y:%lf T:%lf", desired_roll, desired_pitch, desired_yaw, desired_thrust);
+
             //ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
              
-            //rpyT_ctrl(desired_roll, desired_pitch, desired_yaw, desired_thrust); //only attitude
-            //rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust); //attitude+position
-            //rpyT_ctrl(pose_r_d, pose_p_d, yaw_angle, desired_thrust); //only position
-            
-            if(RC_arr[0]<1500){
-                rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust);
-                
-                }
-            else if(RC_arr[0]>=1500){
-                if (takeoff < 97) {
-                    takeoff += 0.2; 
-                    rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, takeoff);
-                }
-                else if (takeoff >= 97){
-                    rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, takeoff+pose_T_d);
-                    //ROS_INFO("thrust:%lf", takeoff+pose_T_d);
-                }
-            }
+            rpyT_ctrl(desired_roll, desired_pitch, desired_yaw, desired_thrust); //only attitude
+
         }
         
         if(fabs(roll_angle)>0.7 || fabs(pitch_angle)>0.7) { // Emergency Stop
@@ -253,27 +263,8 @@ int main(int argc, char **argv){
 	loop_rate.sleep();	
     }
     return 0;
-}
-
-double yaw_nav_prev=0;
-int yaw_nav_count=0;
-void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg){
-    t265_yaw=msg->data;
-    double temp_z=t265_yaw;
-    if(fabs(temp_z-yaw_nav_prev) > PI){
-	if(temp_z>=0)		yaw_nav_count-=1;
-	else if(temp_z<0)	yaw_nav_count+=1;
-    }		
-    yaw_angle=temp_z+(double)2*PI*(double)yaw_nav_count;//yaw
-    yaw_nav_prev=temp_z;
-}
-
-void poseCmdCallback(const geometry_msgs::Vector3::ConstPtr& msg){
-    pose_r_d=msg->x;
-    pose_p_d=msg->y;
-    pose_T_d=msg->z;
-}
-
+}	
+	
 void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
     for(int i=0;i<7;i++){
 	RC_arr[i]=array->data[i];
@@ -281,6 +272,8 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
     return;
 }
 
+double yaw_nav_prev=0;
+int yaw_nav_count=0;
 void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
     RPY_ang_vel = imu_data->angular_velocity;
     roll_vel=RPY_ang_vel.x;
@@ -293,13 +286,21 @@ void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data){
     double temp_y=(-(double)2*(q.x*q.z-q.w*q.y));
     if(fabs(temp_y)>0.9999) temp_y=(temp_y/fabs(temp_y))*0.9999;
     pitch_angle=asin(temp_y);//pitch 
+    
+    double temp_z=atan2((q.x*q.y+q.w*q.z),(double)0.5-(q.y*q.y+q.z*q.z));
+    if(fabs(temp_z-yaw_nav_prev)>3.141592){
+	if(temp_z>=0)		yaw_nav_count-=1;
+	else if(temp_z<0)	yaw_nav_count+=1;
+    }		
+    yaw_angle=temp_z+(double)2*3.141592*(double)yaw_nav_count;//yaw
+    yaw_nav_prev=temp_z;
+    
 }
 
 void rpyT_ctrl(double roll_d, double pitch_d, double yaw_d, double Thrust_d){	
     double tau_Roll_input = tau_Roll.calculate(roll_d, -roll_angle, -roll_vel, 0.005);
     double tau_Pitch_input = tau_Pitch.calculate(pitch_d, pitch_angle, pitch_vel, 0.005);
-    double tau_Yaw_input = tau_Yaw.calculate(-yaw_d, -yaw_angle, -yaw_vel, 0.005);
-    //ROS_INFO("Roll :%lf, yaw_vel :%lf, Yaw:%lf, yaw_angle:%lf", tau_Roll_input, yaw_vel, tau_Yaw_input, yaw_angle);
+    double tau_Yaw_input = tau_Yaw.calculate(-yaw_d, -yaw_vel, 0.005);
     tau_to_PWM(tau_Roll_input, tau_Pitch_input, tau_Yaw_input, Thrust_d);
 }
 
@@ -329,7 +330,6 @@ void tau_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thr
 
 double Force_to_PWM(double F, double Thrust){
     F = 32 * F;
-    //double pwm = (-0.4008 + sqrt(0.16064064 + 0.0008 * 96.747 + 0.0008 * F)) / 0.0004;
     double pwm = -0.0004*F*F + 1.7456*F + 219.98;
     if(pwm<=200) {pwm=200;}
     if(pwm>=1800) {pwm=1800;}

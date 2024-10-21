@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
     
     ros::Publisher bldc=nh.advertise<std_msgs::Int16MultiArray>("bldc_test", 10);
     ros::Subscriber cmd=nh.subscribe("/PWM", 10, &PWMCallback);
-    ros::Rate loop_rate(200);
+    ros::Rate loop_rate(100);
     pca9685.init();
     while(ros::ok()){
         motor1=mapping(PWM[0],200, 1800,min_pulse,max_pulse);
