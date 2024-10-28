@@ -76,10 +76,11 @@ private:
     double integral;
     double pre_error;
     double i_error_limit;
+    double i_limit;
 public:
     PIDController(double p, double i, double d) :
-    Kp(p), Ki(i), Kd(d), integral(0), pre_error(0), i_error_limit(1.5) {}
-    double calculate(double target, double input, double dt, double target_rate){
+    Kp(p), Ki(i), Kd(d), integral(0), pre_error(0), i_error_limit(0.5), i_limit(20) {}
+    double calculate(double target, double input, double target_rate, double dt){
         double error = target - input;
         
         double i_error = error;
@@ -89,19 +90,28 @@ public:
         double P_term = Kp*error;
         
         integral += i_error*dt;
+        
         double I_term = Ki * integral;
         
+	if(I_term>i_limit) I_term = i_limit;
+        else if(I_term<0) I_term = 0;
+
         double derivative = target_rate;
         double D_term = Kd * derivative;
         
-        double controlOutput = P_term + I_term + D_term;
+        if(P_term > 5) P_term = 5;
+	else if (P_term < -5) P_term = -5;
+	if(D_term > 10) D_term = 10;
+	else if (D_term < -10) D_term = -10;
+
+        double controlOutput = P_term + I_term - D_term;
         
         pre_error = error;
         
         return controlOutput; 
     }
 };
-
+/*
 class zPIDController{
 private:
     double angle_Kp;
@@ -117,11 +127,12 @@ private:
     double rate_integral;
     
     double i_limit;
+    double i_error_limit;
     
     double prev_rate_D_term;
 public:
     zPIDController(double angle_p, double angle_i, double angle_d, double rate_p, double rate_i, double rate_d) :
-    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.1),prev_rate_D_term(0) {}
+    angle_Kp(angle_p), angle_Ki(angle_i), angle_Kd(angle_d), rate_Kp(rate_p), rate_Ki(rate_i), rate_Kd(rate_d), prevError(0), angle_integral(0), rate_integral(0), i_limit(0.1), prev_rate_D_term(0), i_error_limit(0.1) {}
     double calculate(double target, double angle_input, double rate_input, double dt){
         double angle_error = target - angle_input;
         
@@ -135,15 +146,15 @@ public:
         
         double target_rate = angle_P_term + angle_I_term + angle_D_term;
         
-        //if(target_rate>0.15) target_rate = 0.15;
-        //else if(target_rate<-0.15) target_rate = -0.15;
-        
         double rate_error = target_rate - rate_input;
+        
+        double i_error = rate_error;
+        if(i_error>i_error_limit) i_error = i_error_limit;
+        else if(i_error<-i_error_limit) i_error = -i_error_limit;
         
         double rate_P_term = rate_Kp*rate_error;
         
-        rate_integral += rate_error*dt;
-        if(fabs(rate_integral)>i_limit)	rate_integral=(rate_integral/fabs(rate_integral))*i_limit;
+        rate_integral += i_error*dt;
         double rate_I_term = rate_Ki * rate_integral;
         
         double rate_D_term = (rate_error-prevError)/dt;
@@ -155,12 +166,11 @@ public:
         prevError = rate_error;
         
         double controlOutput = rate_P_term + rate_I_term + rate_D_term;
-        //if(controlOutput>5) controlOutput = 5;
-        //else if(controlOutput<-5) controlOutput = -5;
         
         return controlOutput; 
     }
 };//dualPID control class
+//*/
 
 class LowPassFilter {
 private:
@@ -213,7 +223,7 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
 
 dualPIDController desired_X(0.4,0,0,0.3,0,0);//0.3 0.3 roll
 dualPIDController desired_Y(0.4,0,0,0.3,0,0);//1 0.7 1 pitch
-dualPIDController desired_Z(0.5,0,0,5,0,0);
+PIDController desired_Z(2,2.5,5);
 
 float posX, posY, posZ;
 float desired_posX = 0, desired_posY = 0, desired_posZ = 0;
@@ -221,7 +231,7 @@ float desired_posX = 0, desired_posY = 0, desired_posZ = 0;
 float altitude = 0;
 
 float ang_limit = 0.2; //0.1
-float thrust_limit = 5;//10
+float thrust_limit = 23;//10
 float altitude_limit = 1;
 
 ros::Publisher pub;

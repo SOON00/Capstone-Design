@@ -142,7 +142,7 @@ int thrust = 0;
 
 double integ_limit=0.5;
 
-dualPIDController tau_Yaw(0,0,0,0,0,0);//100 3
+dualPIDController tau_Yaw(100,0,0,3,0,0);//100 3
 dualPIDController tau_Roll(5.5,0,0.5,1,0,0);//  5 0 0 1.5 0.5 0
 dualPIDController tau_Pitch(5.5,0,0.5,1,0,0);// 4 0 0 1.5 1 0.1
 //6 1.5 0.1 1 0.5 0.4
@@ -227,11 +227,11 @@ int main(int argc, char **argv){
                 
                 }
             else if(RC_arr[0]>=1500){
-                if (takeoff < 97) {
-                    takeoff += 0.2; 
+                if (takeoff < 80) {
+                    takeoff += 0.1; 
                     rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, takeoff);
                 }
-                else if (takeoff >= 97){
+                else if (takeoff >= 80){
                     rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, takeoff+pose_T_d);
                     //ROS_INFO("thrust:%lf", takeoff+pose_T_d);
                 }
