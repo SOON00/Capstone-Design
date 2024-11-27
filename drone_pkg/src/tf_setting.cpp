@@ -12,10 +12,10 @@ double x = 0;
 double y = 318;
 double real_rot = 0;
 
-int input_min = 833;
-int input_max = 1722;
-int ang_min = 0;
-int ang_max = 80;
+int input_min = 944;
+int input_max = 1833;
+int ang_min = 45;
+int ang_max = 0;
 
 int mapping(double value,double min_pwm, double max_pwm,double min_pulse,double max_pulse){
     double pwm_range = max_pwm-min_pwm;//800
@@ -30,10 +30,10 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array) {
         RC_arr[i]=array->data[i];
     }
     euler_rot = mapping(RC_arr[6],input_min,input_max,ang_min,ang_max);
-    euler_rot = euler_rot*PI/180;
-    y = 114.5 + 203.5*cos(euler_rot);
-    x = 203.5*sin(euler_rot);
-    real_rot =0;// atan2(x,y);
+    euler_rot = -euler_rot*PI/180;
+    y = 114.5 + 209*cos(euler_rot);
+    x = 209*sin(euler_rot);
+    real_rot = atan2(x,y);
     return;
 }
 

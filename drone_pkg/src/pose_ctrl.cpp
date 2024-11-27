@@ -40,7 +40,7 @@ public:
         
         double angle_D_term = angle_Kd * rate_input;
         
-        double target_rate = angle_P_term + angle_I_term + angle_D_term;
+        double target_rate = angle_P_term + angle_I_term - angle_D_term;
         
         //if(target_rate>0.15) target_rate = 0.15;
         //else if(target_rate<-0.15) target_rate = -0.15;
@@ -79,7 +79,7 @@ private:
     double i_limit;
 public:
     PIDController(double p, double i, double d) :
-    Kp(p), Ki(i), Kd(d), integral(0), pre_error(0), i_error_limit(0.5), i_limit(20) {}
+    Kp(p), Ki(i), Kd(d), integral(0), pre_error(0), i_error_limit(0.5), i_limit(22) {}
     double calculate(double target, double input, double target_rate, double dt){
         double error = target - input;
         
@@ -221,9 +221,9 @@ void arrayCallback(const std_msgs::Float32MultiArray::ConstPtr &array){
     return;
 }
 
-dualPIDController desired_X(0.4,0,0,0.3,0,0);//0.3 0.3 roll
-dualPIDController desired_Y(0.4,0,0,0.3,0,0);//1 0.7 1 pitch
-PIDController desired_Z(2,2.5,5);
+dualPIDController desired_X(0.4,0.2,0,0.3,0,0);//0.3 0.3 roll
+dualPIDController desired_Y(0.4,0.2,0,0.3,0,0);//1 0.7 1 pitch
+PIDController desired_Z(7,3,10);
 
 float posX, posY, posZ;
 float desired_posX = 0, desired_posY = 0, desired_posZ = 0;
@@ -231,7 +231,7 @@ float desired_posX = 0, desired_posY = 0, desired_posZ = 0;
 float altitude = 0;
 
 float ang_limit = 0.2; //0.1
-float thrust_limit = 23;//10
+float thrust_limit = 25;//10
 float altitude_limit = 1;
 
 ros::Publisher pub;

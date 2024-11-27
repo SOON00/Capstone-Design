@@ -24,7 +24,7 @@ buffers = {
 def connect_serial():
     while not rospy.is_shutdown():
         try:
-            ser = serial.Serial('/dev/ttyPPM', 9600)
+            ser = serial.Serial('/dev/ttyACM0', 9600)
             print("Serial connection established.")
             return ser
         except serial.SerialException:

@@ -91,10 +91,10 @@ double real_rot = 0;
 double x = 0;
 double y = 318;
 
-int input_min = 833;
-int input_max = 1722;
-int ang_min = 0;
-int ang_max = 80;
+int input_min = 944;
+int input_max = 1833;
+int ang_min = 45;
+int ang_max = 0;
 
 int mapping(double value,double min_pwm, double max_pwm,double min_pulse,double max_pulse){
     double pwm_range = max_pwm-min_pwm;//800
@@ -226,10 +226,10 @@ int main(int argc, char** argv) {
         auto accel_data_array = accel_data(accel);
         auto gyro_data_array = gyro_data(gyro);
         euler_rot = mapping(RC_arr[6],input_min,input_max,ang_min,ang_max);
-        yaw_rotation_angle = euler_rot*PI/180; // 45도
+        yaw_rotation_angle = -euler_rot*PI/180; // 45도
         
-        y = 114.5 + 203.5*cos(yaw_rotation_angle);
-        x = 203.5*sin(yaw_rotation_angle);
+        y = 114.5 + 209*cos(yaw_rotation_angle);
+        x = 209*sin(yaw_rotation_angle);
         
         real_rot = atan2(x,y);
         

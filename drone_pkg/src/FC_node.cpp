@@ -122,7 +122,7 @@ double desired_thrust = 0;//desired thrust              목표 스러스트
 double takeoff = 0;
 
 //--------------------------------------------------------
-static double rp_limit=0.2;//(rad)       롤피치 각도제한 
+static double rp_limit=0.3;//(rad)       롤피치 각도제한 
 static double yaw_vel_limit=0.001;//(rad/s) 요 각속도 제한
 
 static double T_limit=100;//(N)추력 제한
@@ -137,14 +137,15 @@ void imu_Callback(const sensor_msgs::Imu::ConstPtr &imu_data);
 void poseCmdCallback(const geometry_msgs::Vector3::ConstPtr& msg);
 void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg);
 double constrain(double F);
+int mapping(double value,double min_pwm, double max_pwm,double min_pulse,double max_pulse);
 //--------------------------------------------------------
 int thrust = 0;
 
 double integ_limit=0.5;
 
-dualPIDController tau_Yaw(100,0,0,3,0,0);//100 3
-dualPIDController tau_Roll(5.5,0,0.5,1,0,0);//  5 0 0 1.5 0.5 0
-dualPIDController tau_Pitch(5.5,0,0.5,1,0,0);// 4 0 0 1.5 1 0.1
+dualPIDController tau_Yaw(70,0,0,3,0,0);//100 3
+dualPIDController tau_Roll(5.5,0,0.5,1,0,0);//  5.5 0.5 1
+dualPIDController tau_Pitch(5.5,0.15,0.5,1,0,0);// 5.5 0.5 1
 //6 1.5 0.1 1 0.5 0.4
 //PIDController tau_Roll(0,0,3);
 //PIDController tau_Pitch(0,0,3);
@@ -219,26 +220,26 @@ int main(int argc, char **argv){
             //ROS_INFO("R:%lf, P:%lf, Y:%lf", roll_angle, pitch_angle, yaw_angle);
              
             //rpyT_ctrl(desired_roll, desired_pitch, desired_yaw, desired_thrust); //only attitude
-            //rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust); //attitude+position
+            rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust); //attitude+position
             //rpyT_ctrl(pose_r_d, pose_p_d, yaw_angle, desired_thrust); //only position
             
             if(RC_arr[0]<1500){
-                rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust);
+                //rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, desired_thrust);
                 
                 }
             else if(RC_arr[0]>=1500){
                 if (takeoff < 80) {
                     takeoff += 0.1; 
-                    rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, takeoff);
+                    //rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, takeoff);
                 }
                 else if (takeoff >= 80){
-                    rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, takeoff+pose_T_d);
+                    //rpyT_ctrl(desired_roll+pose_r_d, desired_pitch+pose_p_d, desired_yaw, takeoff+pose_T_d);
                     //ROS_INFO("thrust:%lf", takeoff+pose_T_d);
                 }
             }
         }
         
-        if(fabs(roll_angle)>0.7 || fabs(pitch_angle)>0.7) { // Emergency Stop
+        if(fabs(roll_angle)>1 || fabs(pitch_angle)>1) { // Emergency Stop
             PWM_cmd.data.resize(4);
             PWM_cmd.data[0]=200;
             PWM_cmd.data[1]=200;
@@ -254,7 +255,13 @@ int main(int argc, char **argv){
     }
     return 0;
 }
-
+int mapping(double value,double min_pwm, double max_pwm,double min_pulse,double max_pulse){
+    double pwm_range = max_pwm-min_pwm;//800
+    double pulse_range = max_pulse-min_pulse;//410
+    long double scale_factor = pwm_range/pulse_range;//800/410
+    double result = min_pulse+((value-min_pwm)*pulse_range/pwm_range);//100+x*410/800
+    return result;
+}
 double yaw_nav_prev=0;
 int yaw_nav_count=0;
 void yawCmdCallback(const std_msgs::Float32::ConstPtr& msg){
@@ -308,12 +315,19 @@ double constrain(double F){
     else if(F>50) return 50;
     else return F;
 }
-
+double euler_rot = 0;
+double x=0, y=0, r=0;
 void tau_to_PWM(double tau_r_des, double tau_p_des, double tau_y_des, double Thrust_des){	
-    F1 = -(1.1121 * tau_r_des + 1.1121 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F2 = -(1.1121 * tau_r_des - 1.1121 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F3 = -(-1.1121 * tau_r_des - 1.1121 * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
-    F4 = -(-1.1121 * tau_r_des + 1.1121 * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
+    
+    //0도 r=318 1.1121 Ixx=337
+    //40도 r=300
+    //45도 r=295 1.2533 Ixx=297 10% 감소
+    //80도 r=250 1.414 Ixx=240 30% 감소
+    double M = 1.2533;
+    F1 = -(M * tau_r_des + M * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
+    F2 = -(M * tau_r_des - M * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
+    F3 = -(-M * tau_r_des - M * tau_p_des - 0.25 * tau_y_des - 0.25 * Thrust_des);
+    F4 = -(-M * tau_r_des + M * tau_p_des + 0.25 * tau_y_des - 0.25 * Thrust_des);
     //ROS_INFO("F1:%lf, F2:%lf, F3:%lf, F4:%lf", F1, F2, F3, F4);
     F1= constrain(F1);
     F2= constrain(F2);
